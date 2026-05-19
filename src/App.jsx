@@ -84,7 +84,7 @@ service cloud.firestore {
   if (!device.user) return <PinScreen />;
 
   return (
-    <div className="app">
+    <div className="app app--with-bg">
       <TopBar />
       <main>
         {device.mode === 'kitchen' && <KitchenMode />}
