@@ -378,10 +378,110 @@ main {
 .kds-ticket.urgent  { border-color: var(--red); animation: pulseBorder 1.6s ease-in-out infinite; }
 @keyframes pulseBorder { 0%,100% { box-shadow: 0 0 0 1px rgba(248,113,113,0.3); } 50% { box-shadow: 0 0 0 3px rgba(248,113,113,0.4); } }
 
-.kds-ticket-head { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+/* ── KDS wait-time colours ─────────────────────────────────────────────── */
+.kds-ticket-head {
+  padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  cursor: pointer; /* tappable for collapse */
+  user-select: none;
+}
+.kds-ticket-head:active { background: var(--surface-3); }
 .kds-ticket-head .num { font-family: var(--font-serif); font-style: italic; font-size: 24px; color: var(--brand); }
-.kds-ticket-head .meta { font-size: 12px; color: var(--text-3); text-align: right; }
-.kds-ticket-head .meta b { display: block; color: var(--text); font-size: 15px; font-weight: 500; font-family: var(--font-mono); }
+.kds-ticket-head .meta { font-size: 12px; color: var(--text-3); text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.kds-ticket-head .meta b { display: block; color: var(--text); font-size: 15px; font-weight: 600; font-family: var(--font-mono); }
+.meta .time-warn    { color: var(--amber) !important; }
+.meta .time-overdue { color: var(--red) !important; }
+.collapse-icon { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+
+/* Progress pill */
+.kds-progress {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-3); color: var(--text-2);
+  border: 1px solid var(--border);
+}
+.kds-progress.done { background: var(--green-deep); color: var(--green); border-color: rgba(74,222,128,0.3); }
+
+/* Extension badge */
+.kds-extensions {
+  font-size: 10px; font-family: var(--font-mono);
+  padding: 2px 7px; border-radius: 999px;
+  background: var(--amber-deep); color: var(--amber);
+  border: 1px solid rgba(251,191,36,0.3);
+}
+
+/* Collapsed ticket */
+.kds-ticket.collapsed .kds-ticket-head { border-bottom: none; }
+.kds-ticket-collapsed {
+  padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 13px; color: var(--text-3); font-family: var(--font-mono);
+  background: var(--bg-2);
+}
+.collapsed-items  { color: var(--text-2); }
+.collapsed-time   { font-weight: 600; color: var(--text); }
+.collapsed-time.time-warn    { color: var(--amber); }
+.collapsed-time.time-overdue { color: var(--red); }
+.collapsed-progress { color: var(--green); margin-left: auto; }
+
+/* Extend wait button */
+.btn-extend {
+  position: relative;
+  background: var(--amber-deep); color: var(--amber);
+  border: 1px solid rgba(251,191,36,0.3);
+  padding: 10px 14px; font-size: 13px; font-weight: 600;
+}
+.btn-extend:active { opacity: 0.8; }
+.ext-badge {
+  position: absolute; top: -6px; right: -6px;
+  width: 18px; height: 18px; border-radius: 999px;
+  background: var(--amber); color: #1a1200;
+  font-size: 10px; font-weight: 700;
+  display: grid; place-items: center;
+}
+.btn-ready {
+  flex: 1;
+  background: var(--surface-3); color: var(--text);
+  border: 1px solid var(--border);
+  padding: 14px; font-size: 15px; font-weight: 600;
+}
+.btn-ready:active { background: var(--green-deep); color: var(--green); }
+
+/* ── Floor table wait times ────────────────────────────────────────────── */
+.table-wait {
+  font-size: 10px; font-family: var(--font-mono); font-weight: 600;
+  color: var(--text-3); margin-top: 3px;
+}
+.table-wait.warning { color: var(--amber); }
+.table-wait.overdue { color: var(--red); font-size: 11px; }
+
+.table-card.table-warning {
+  border-color: rgba(251,191,36,0.5) !important;
+  background: linear-gradient(180deg, rgba(251,191,36,0.07), transparent 50%), var(--surface) !important;
+}
+.table-card.table-overdue {
+  border-color: rgba(248,113,113,0.6) !important;
+  background: linear-gradient(180deg, rgba(248,113,113,0.09), transparent 50%), var(--surface) !important;
+  animation: overdueTablePulse 2s ease-in-out infinite;
+}
+@keyframes overdueTablePulse {
+  0%,100% { box-shadow: 0 0 0 1px rgba(248,113,113,0.2); }
+  50%     { box-shadow: 0 0 0 3px rgba(248,113,113,0.35); }
+}
+
+/* ── Till open tab wait times ─────────────────────────────────────────── */
+.tab-wait {
+  font-size: 11px; font-family: var(--font-mono); font-weight: 500;
+  color: var(--text-3); margin-top: 3px;
+}
+.tab-wait.warn    { color: var(--amber); }
+.tab-wait.overdue { color: var(--red); }
+
+.tab-item.tab-warn    { border-color: rgba(251,191,36,0.45); }
+.tab-item.tab-overdue {
+  border-color: rgba(248,113,113,0.6);
+  animation: tabPulse 2s ease-in-out infinite;
+}
 .kds-items { /* natural height */ }
 .kds-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); }
 .kds-item:last-child { border-bottom: none; }

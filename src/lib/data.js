@@ -522,8 +522,29 @@ export function watchSettledOrders(cb) {
 }
 
 // ── Venue settings update ──────────────────────────────────────────────────
+export async function extendOrderWait(orderId, extraMins) {
+  // Push sentAt back by extraMins so the aging timer restarts
+  const snap = await getDoc(doc(db, 'venues', _venueId, 'orders', orderId));
+  if (!snap.exists()) return;
+  const order = snap.data();
+  const currentSentMs = order.sentAt?.toMillis?.() || Date.now();
+  const newSentMs = currentSentMs + extraMins * 60 * 1000;
+  const extensions = (order.waitExtensions || 0) + 1;
+  await updateDoc(doc(db, 'venues', _venueId, 'orders', orderId), {
+    sentAt: new Date(newSentMs),
+    waitExtensions: extensions
+  });
+}
+
 export async function updateVenue(patch) {
   await updateDoc(venueRef(), patch);
+}
+
+// Watch venue for real-time settings (used by KDS, Floor, Till for threshold)
+export function watchVenue(cb) {
+  return onSnapshot(venueRef(), s => {
+    if (s.exists()) cb({ id: s.id, ...s.data() });
+  });
 }
 
 // ── Sessions ───────────────────────────────────────────────────────────────

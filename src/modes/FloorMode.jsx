@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   watchTables, watchOpenOrders, updateTableStatus,
-  createOrder, sendOrderToKitchen, watchBookingsForDate, updateBooking
+  createOrder, sendOrderToKitchen, watchBookingsForDate, updateBooking,
+  watchVenue
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
@@ -12,17 +13,27 @@ export default function FloorMode() {
   const [orders, setOrders] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [zone, setZone] = useState('All');
-  const [openTable, setOpenTable] = useState(null);  // tableId being edited
-  const [cart, setCart] = useState([]);              // pending (not yet sent) lines
+  const [openTable, setOpenTable] = useState(null);
+  const [cart, setCart] = useState([]);
   const [toast, setToast] = useState(null);
   const [showBookings, setShowBookings] = useState(false);
+  const [venue, setVenue] = useState(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => watchTables(setTables), []);
   useEffect(() => watchOpenOrders(setOrders), []);
+  useEffect(() => watchVenue(setVenue), []);
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     return watchBookingsForDate(today, setBookings);
   }, []);
+  // Re-render every 30s for live timers
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const alertMins = venue?.kdsAlertMins ?? 20;
 
   const upcomingBookings = useMemo(() => {
     const now = new Date();
@@ -237,8 +248,15 @@ export default function FloorMode() {
         {visibleTables.map(t => {
           const o = orderForTable(t.id);
           const total = o?.total || (o?.items || []).reduce((s, l) => s + l.price * l.qty, 0);
+          const waitMins = o?.sentAt ? Math.floor((Date.now() - o.sentAt.toMillis()) / 60000) : null;
+          const isOverdue = waitMins !== null && waitMins >= alertMins;
+          const isWarning = waitMins !== null && waitMins >= alertMins * 0.6 && !isOverdue;
           return (
-            <button key={t.id} className={`table-card ${t.status}`} onClick={() => handleOpenTable(t)}>
+            <button
+              key={t.id}
+              className={`table-card ${t.status}${isOverdue ? ' table-overdue' : isWarning ? ' table-warning' : ''}`}
+              onClick={() => handleOpenTable(t)}
+            >
               <div className="head">
                 <span className="num">{t.number}</span>
                 <span className="status-dot" />
@@ -246,9 +264,13 @@ export default function FloorMode() {
               <div className="body">
                 <div className="row"><span>{t.zone}</span><span className="seats">{t.seats} seats</span></div>
                 {o && (
-                  <>
-                    <div className="row"><span>{(o.items || []).length} items</span><span className="total">${total.toFixed(2)}</span></div>
-                  </>
+                  <div className="row"><span>{(o.items || []).length} items</span><span className="total">${total.toFixed(2)}</span></div>
+                )}
+                {/* Wait time */}
+                {waitMins !== null && (
+                  <div className={`table-wait${isOverdue ? ' overdue' : isWarning ? ' warning' : ''}`}>
+                    ⏱ {waitMins}m waiting
+                  </div>
                 )}
                 <div className="status-label">{statusLabel(t.status, o)}</div>
               </div>

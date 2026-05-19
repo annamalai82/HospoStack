@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   watchTables, watchOpenOrders, updateTableStatus,
   createOrder, sendOrderToKitchen, settleOrder,
-  upsertCustomer, queueReceiptDelivery, previewVoucherRedemption
+  upsertCustomer, queueReceiptDelivery, previewVoucherRedemption,
+  watchVenue
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
@@ -27,9 +28,18 @@ export default function TillMode() {
   const [cart, setCart] = useState([]);
   const [showPay, setShowPay] = useState(false);
   const [toast, setToast] = useState(null);
+  const [venue, setVenue] = useState(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => watchTables(setTables), []);
   useEffect(() => watchOpenOrders(setOrders), []);
+  useEffect(() => watchVenue(setVenue), []);
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const alertMins = venue?.kdsAlertMins ?? 20;
 
   const showToast = (msg, kind = 'success') => {
     setToast({ msg, kind });
@@ -231,6 +241,7 @@ export default function TillMode() {
           tabs={openTabs}
           tables={tables}
           activeId={activeOrderId}
+          alertMins={alertMins}
           onSelect={(o) => { setActiveOrderId(o.id); setCart([]); }}
           onPay={(o) => handleTakePayment(o)}
         />
@@ -248,7 +259,7 @@ export default function TillMode() {
 }
 
 // ── Open tabs sidebar ────────────────────────────────────────────────────
-function OpenTabsPane({ tabs, tables, activeId, onSelect, onPay }) {
+function OpenTabsPane({ tabs, tables, activeId, alertMins = 20, onSelect, onPay }) {
   if (tabs.length === 0) {
     return (
       <aside className="tabs-pane tabs-pane--empty">
@@ -268,10 +279,13 @@ function OpenTabsPane({ tabs, tables, activeId, onSelect, onPay }) {
           const tbl = tables.find(t => t.id === o.tableId);
           const billing = tbl?.status === 'billing';
           const ready = o.status === 'ready';
+          const waitMins = o.sentAt ? Math.floor((Date.now() - o.sentAt.toMillis()) / 60000) : null;
+          const isOverdue = waitMins !== null && waitMins >= alertMins;
+          const isWarn    = waitMins !== null && waitMins >= alertMins * 0.6 && !isOverdue;
           return (
             <div
               key={o.id}
-              className={`tab-item ${activeId === o.id ? 'active' : ''} ${billing ? 'billing' : ''} ${ready ? 'ready' : ''}`}
+              className={`tab-item ${activeId === o.id ? 'active' : ''} ${billing ? 'billing' : ''} ${ready ? 'ready' : ''} ${isOverdue ? 'tab-overdue' : isWarn ? 'tab-warn' : ''}`}
             >
               <button className="tab-main" onClick={() => onSelect(o)}>
                 <div className="tab-head">
@@ -284,6 +298,12 @@ function OpenTabsPane({ tabs, tables, activeId, onSelect, onPay }) {
                   <span>{(o.items || []).length} items</span>
                   <span className="tab-total">${(o.total || 0).toFixed(2)}</span>
                 </div>
+                {/* Wait time */}
+                {waitMins !== null && (
+                  <div className={`tab-wait ${isOverdue ? 'overdue' : isWarn ? 'warn' : ''}`}>
+                    ⏱ {waitMins}m waiting
+                  </div>
+                )}
               </button>
               <button className="tab-pay" onClick={() => onPay(o)} title="Take payment">
                 💳
