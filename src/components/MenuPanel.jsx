@@ -10,11 +10,11 @@ const STATIONS = ['kitchen', 'bar', 'expo'];
 const COURSES = ['starter', 'main', 'dessert', 'drink', 'side'];
 const SWATCHES = ['#f59e0b','#ef4444','#8b5cf6','#10b981','#ec4899','#3b82f6','#06b6d4','#f97316','#84cc16','#a855f7'];
 
-export default function MenuPanel() {
+export default function MenuPanel({ initialTab, onToast } = {}) {
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
   const [modifierGroups, setModifierGroups] = useState([]);
-  const [tab, setTab] = useState('items'); // 'items' | 'categories'
+  const [tab, setTab] = useState(initialTab || 'items'); // 'items' | 'categories'
   const [filterCat, setFilterCat] = useState('all');
   const [editing, setEditing] = useState(null);
   const [editingCat, setEditingCat] = useState(null);

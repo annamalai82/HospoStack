@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useDevice } from '../context/DeviceContext';
 import ManagerHub from './ManagerHub';
-import VenueSwitcher from './VenueSwitcher';
 import ConnectionIndicator from './ConnectionIndicator';
 
 export default function TopBar() {
@@ -21,8 +20,8 @@ export default function TopBar() {
           <span className="mark">Hospo</span>
           <span className="stack">Stack</span>
           <span className="dot" />
-          <span className="venue-name">
-            <VenueSwitcher compact />
+          <span className="venue-name" style={{ color: 'var(--brand)', display: 'inline' }}>
+            {device.venueName || ''}
           </span>
         </div>
 
@@ -33,6 +32,7 @@ export default function TopBar() {
             <span className="pin" />
             {device.mode === 'kitchen' ? 'Kitchen'
               : device.mode === 'floor' ? 'Floor'
+              : device.mode === 'config' ? 'Config'
               : 'Till'}
             <span className="device-name">· {device.deviceName}</span>
           </span>

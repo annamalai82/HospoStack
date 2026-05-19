@@ -479,6 +479,19 @@ export async function createMenuItem(payload) {
   return ref.id;
 }
 
+export async function createMenuCategory(payload) {
+  const ref = await addDoc(col('menu_categories'), { active: true, ...payload });
+  return ref.id;
+}
+
+export async function updateMenuCategory(catId, patch) {
+  await updateDoc(doc(db, 'venues', _venueId, 'menu_categories', catId), patch);
+}
+
+export async function deleteMenuCategory(catId) {
+  await deleteDoc(doc(db, 'venues', _venueId, 'menu_categories', catId));
+}
+
 export async function updateMenuItem(itemId, patch) {
   await updateDoc(doc(db, 'venues', _venueId, 'menu_items', itemId), patch);
 }

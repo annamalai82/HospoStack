@@ -6,6 +6,7 @@ import TopBar from './components/TopBar';
 import KitchenMode from './modes/KitchenMode';
 import FloorMode from './modes/FloorMode';
 import TillMode from './modes/TillMode';
+import ConfigMode from './modes/ConfigMode';
 import { seedIfEmpty } from './lib/data';
 
 function Shell() {
@@ -80,7 +81,8 @@ service cloud.firestore {
     );
   }
 
-  if (!device) return <ConfigScreen />;
+  // Force re-configuration for older devices that don't have a venue binding
+  if (!device || !device.venueId) return <ConfigScreen />;
   if (!device.user) return <PinScreen />;
 
   return (
@@ -90,6 +92,7 @@ service cloud.firestore {
         {device.mode === 'kitchen' && <KitchenMode />}
         {device.mode === 'floor' && <FloorMode />}
         {device.mode === 'till' && <TillMode />}
+        {device.mode === 'config' && <ConfigMode />}
       </main>
     </div>
   );
