@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   watchTables, watchOpenOrders, updateTableStatus,
   createOrder, sendOrderToKitchen, watchBookingsForDate, updateBooking,
-  watchVenue
+  watchVenue, updateOrder
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
@@ -92,6 +92,35 @@ export default function FloorMode() {
   // identical items with different selections stay separate
   const addLine = (line) => setCart(c => [...c, line]);
 
+  // ── Modify already-sent items (edit order in Firestore directly) ─────
+  const modifySentItem = async (sentIndex, newQty) => {
+    const existing = orderForTable(openTable?.id);
+    if (!existing) return;
+    const items = [...(existing.items || [])];
+    if (sentIndex < 0 || sentIndex >= items.length) return;
+    items[sentIndex] = { ...items[sentIndex], qty: newQty };
+    const totals = calcTotals(items);
+    await updateOrder(existing.id, { items, ...totals });
+    showToast('Order updated');
+  };
+
+  const removeSentItem = async (sentIndex) => {
+    const existing = orderForTable(openTable?.id);
+    if (!existing) return;
+    const items = (existing.items || []).filter((_, i) => i !== sentIndex);
+    if (items.length === 0) {
+      // Remove the whole order if nothing left
+      await updateOrder(existing.id, { status: 'voided', items: [] });
+      await updateTableStatus(openTable.id, 'free');
+      handleCloseEditor();
+      showToast('Order removed');
+      return;
+    }
+    const totals = calcTotals(items);
+    await updateOrder(existing.id, { items, ...totals });
+    showToast('Item removed');
+  };
+
   // ── Send to kitchen ──────────────────────────────────────────────────
   const handleSend = async () => {
     if (!openTable || cart.length === 0) return;
@@ -147,6 +176,8 @@ export default function FloorMode() {
           onAddLine={addLine}
           onQtyChange={setQty}
           onRemove={removeLine}
+          onModifySent={modifySentItem}
+          onRemoveSent={removeSentItem}
           header={
             <div className="cart-head">
               <div className="tbl">Table <b>{openTable.number}</b></div>

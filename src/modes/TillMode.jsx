@@ -3,7 +3,7 @@ import {
   watchTables, watchOpenOrders, updateTableStatus,
   createOrder, sendOrderToKitchen, settleOrder,
   upsertCustomer, queueReceiptDelivery, previewVoucherRedemption,
-  watchVenue
+  watchVenue, updateOrder
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
@@ -74,6 +74,29 @@ export default function TillMode() {
   const setQty = (i, q) => setCart(c => c.map((l, j) => j === i ? { ...l, qty: q } : l));
   const removeLine = (i) => setCart(c => c.filter((_, j) => j !== i));
   const addLine = (line) => setCart(c => [...c, line]);
+
+  // ── Modify already-sent items directly on the active order ───────────
+  const modifySentItem = async (sentIndex, newQty) => {
+    if (!activeOrder) return;
+    const items = [...(activeOrder.items || [])];
+    if (sentIndex < 0 || sentIndex >= items.length) return;
+    items[sentIndex] = { ...items[sentIndex], qty: newQty };
+    const totals = calcTotals(items);
+    await updateOrder(activeOrder.id, { items, ...totals });
+  };
+
+  const removeSentItem = async (sentIndex) => {
+    if (!activeOrder) return;
+    const items = (activeOrder.items || []).filter((_, i) => i !== sentIndex);
+    if (items.length === 0) {
+      await updateOrder(activeOrder.id, { status: 'voided', items: [] });
+      setActiveOrderId(null);
+      showToast('Order removed');
+      return;
+    }
+    const totals = calcTotals(items);
+    await updateOrder(activeOrder.id, { items, ...totals });
+  };
 
   // ── Send to Kitchen (step 1) ────────────────────────────────────────
   const handleSendToKitchen = async () => {
@@ -233,6 +256,8 @@ export default function TillMode() {
           onAddLine={addLine}
           onQtyChange={setQty}
           onRemove={removeLine}
+          onModifySent={modifySentItem}
+          onRemoveSent={removeSentItem}
           header={headerContent}
           footer={footerContent}
         />

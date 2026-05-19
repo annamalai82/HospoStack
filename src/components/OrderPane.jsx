@@ -9,6 +9,8 @@ export default function OrderPane({
   onAddLine,
   onQtyChange,
   onRemove,
+  onModifySent,   // (sentIndex, newQty) — edit a sent item
+  onRemoveSent,   // (sentIndex) — remove a sent item
   header,
   footer,
   gstPct = 10
@@ -67,8 +69,11 @@ export default function OrderPane({
           </div>
         ) : allLines.map((line, i) => {
           const isSent = line._sent;
+          const sentIndex = isSent ? i : -1; // index in sentItems array
           const cartIndex = isSent ? -1 : i - sentItems.length;
-          const isEditing = !isSent && editingIndex === cartIndex;
+          // All items editable — sent items use sentIndex, cart items use cartIndex
+          const editKey = isSent ? `sent-${sentIndex}` : `cart-${cartIndex}`;
+          const isEditing = editingIndex === editKey;
 
           return (
             <CartRow
@@ -76,14 +81,26 @@ export default function OrderPane({
               line={line}
               isSent={isSent}
               isEditing={isEditing}
-              onEdit={() => { if (!isSent) setEditingIndex(cartIndex); }}
+              onEdit={() => setEditingIndex(editKey)}
               onDone={() => setEditingIndex(null)}
-              onInc={() => onQtyChange(cartIndex, line.qty + 1)}
-              onDec={() => {
-                if (line.qty <= 1) { onRemove(cartIndex); setEditingIndex(null); }
-                else onQtyChange(cartIndex, line.qty - 1);
+              onInc={() => {
+                if (isSent && onModifySent) onModifySent(sentIndex, line.qty + 1);
+                else onQtyChange(cartIndex, line.qty + 1);
               }}
-              onRemove={() => { onRemove(cartIndex); setEditingIndex(null); }}
+              onDec={() => {
+                if (isSent) {
+                  if (line.qty <= 1) { if (onRemoveSent) onRemoveSent(sentIndex); setEditingIndex(null); }
+                  else if (onModifySent) onModifySent(sentIndex, line.qty - 1);
+                } else {
+                  if (line.qty <= 1) { onRemove(cartIndex); setEditingIndex(null); }
+                  else onQtyChange(cartIndex, line.qty - 1);
+                }
+              }}
+              onRemove={() => {
+                if (isSent) { if (onRemoveSent) onRemoveSent(sentIndex); }
+                else onRemove(cartIndex);
+                setEditingIndex(null);
+              }}
             />
           );
         })}
@@ -180,22 +197,36 @@ export default function OrderPane({
                   <div className="cart-empty"><div className="icon">🍽</div><p>Tap menu items to add to order</p></div>
                 ) : allLines.map((line, i) => {
                   const isSent = line._sent;
+                  const sentIndex = isSent ? i : -1;
                   const cartIndex = isSent ? -1 : i - sentItems.length;
-                  const isEditing = !isSent && editingIndex === cartIndex;
+                  const editKey = isSent ? `sent-${sentIndex}` : `cart-${cartIndex}`;
+                  const isEditing = editingIndex === editKey;
                   return (
                     <CartRow
                       key={i}
                       line={line}
                       isSent={isSent}
                       isEditing={isEditing}
-                      onEdit={() => { if (!isSent) setEditingIndex(cartIndex); }}
+                      onEdit={() => setEditingIndex(editKey)}
                       onDone={() => setEditingIndex(null)}
-                      onInc={() => onQtyChange(cartIndex, line.qty + 1)}
-                      onDec={() => {
-                        if (line.qty <= 1) { onRemove(cartIndex); setEditingIndex(null); }
-                        else onQtyChange(cartIndex, line.qty - 1);
+                      onInc={() => {
+                        if (isSent && onModifySent) onModifySent(sentIndex, line.qty + 1);
+                        else onQtyChange(cartIndex, line.qty + 1);
                       }}
-                      onRemove={() => { onRemove(cartIndex); setEditingIndex(null); }}
+                      onDec={() => {
+                        if (isSent) {
+                          if (line.qty <= 1) { if (onRemoveSent) onRemoveSent(sentIndex); setEditingIndex(null); }
+                          else if (onModifySent) onModifySent(sentIndex, line.qty - 1);
+                        } else {
+                          if (line.qty <= 1) { onRemove(cartIndex); setEditingIndex(null); }
+                          else onQtyChange(cartIndex, line.qty - 1);
+                        }
+                      }}
+                      onRemove={() => {
+                        if (isSent) { if (onRemoveSent) onRemoveSent(sentIndex); }
+                        else onRemove(cartIndex);
+                        setEditingIndex(null);
+                      }}
                     />
                   );
                 })}
@@ -252,25 +283,26 @@ function CartRow({ line, isSent, isEditing, onEdit, onDone, onInc, onDec, onRemo
         <div className="cart-row-edit-inner">
           <div className="cart-edit-info">
             <span className="cart-edit-name">{line.name}</span>
-            {selections.length > 0 && (
-              <div className="cart-edit-sel">{selections.map(s => s.label).join(' · ')}</div>
+            {isSent && (
+              <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span>⚠ Already sent to kitchen</span>
+                <span style={{ color: 'var(--text-3)' }}>— KDS will update</span>
+              </div>
             )}
+            {selections.length > 0 && <div className="cart-edit-sel">{selections.map(s => s.label).join(' · ')}</div>}
             {line.notes && <div className="cart-edit-notes">↳ {line.notes}</div>}
             <div className="cart-edit-unit-price">${line.price.toFixed(2)} each</div>
           </div>
           <div className="cart-edit-controls">
-            {/* Delete button */}
             <button className="cart-edit-delete" onClick={e => { e.stopPropagation(); onRemove(); }}>
               <span>🗑</span>
               <span>Remove</span>
             </button>
-            {/* Stepper */}
             <div className="cart-edit-stepper">
               <button className="cart-edit-step dec" onClick={e => { e.stopPropagation(); onDec(); }}>−</button>
               <span className="cart-edit-qty">{line.qty}</span>
               <button className="cart-edit-step inc" onClick={e => { e.stopPropagation(); onInc(); }}>+</button>
             </div>
-            {/* Subtotal + done */}
             <div className="cart-edit-subtotal">${(line.price * line.qty).toFixed(2)}</div>
             <button className="cart-edit-done" onClick={e => { e.stopPropagation(); onDone(); }}>✓ Done</button>
           </div>
@@ -280,19 +312,17 @@ function CartRow({ line, isSent, isEditing, onEdit, onDone, onInc, onDec, onRemo
   }
 
   return (
-    <div
-      className={`cart-row ${isSent ? 'cart-row--sent' : 'cart-row--active'}`}
-      onClick={() => !isSent && onEdit()}
-    >
-      {/* Qty badge */}
-      <div className={`cart-qty-pill ${isSent ? '' : 'cart-qty-pill--tap'}`}>
+    <div className={`cart-row cart-row--active`} onClick={onEdit}>
+      <div className={`cart-qty-pill cart-qty-pill--tap ${isSent ? 'cart-qty-pill--sent' : ''}`}>
         {line.qty}
       </div>
-
-      {/* Name + metadata */}
       <div className="name" style={{ flex: 1 }}>
         <span>{line.name}</span>
-        {isSent && <span className="badge" style={{ marginLeft: 6 }}>sent</span>}
+        {isSent && (
+          <span className="badge" style={{ marginLeft: 6, background: 'rgba(96,165,250,0.12)', color: 'var(--blue)' }}>
+            sent
+          </span>
+        )}
         {selections.length > 0 && (
           <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, lineHeight: 1.4 }}>
             {selections.map(s => s.label).join(' · ')}
@@ -304,14 +334,8 @@ function CartRow({ line, isSent, isEditing, onEdit, onDone, onInc, onDec, onRemo
           </div>
         )}
       </div>
-
-      {/* Price */}
       <div className="price">${(line.price * line.qty).toFixed(2)}</div>
-
-      {/* Tap hint (non-sent items only) */}
-      {!isSent && (
-        <div className="cart-tap-hint">✎</div>
-      )}
+      <div className="cart-tap-hint">✎</div>
     </div>
   );
 }
