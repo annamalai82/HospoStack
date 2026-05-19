@@ -2,20 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { watchCategories, watchMenuItems } from '../lib/data';
 import ModifierPicker from './ModifierPicker';
 
-/**
- * Reusable order/cart pane.
- *
- * Props:
- *   cartItems          – current line items (live array)
- *   onAdd(item)        – add menu item to cart (simple, no modifiers)
- *   onAddLine(line)    – add a fully-configured line (called from modifier picker)
- *   onQtyChange(i,q)   – change qty for line at index i
- *   onRemove(i)        – remove line at index i
- *   sentItems          – items already sent to kitchen (read-only, shown faded)
- *   header             – React node shown at top of cart
- *   footer             – React node shown at bottom of cart (actions)
- *   gstPct             – GST percentage (default 10)
- */
 export default function OrderPane({
   cartItems = [],
   sentItems = [],
@@ -32,10 +18,10 @@ export default function OrderPane({
   const [activeCat, setActiveCat] = useState(null);
   const [search, setSearch] = useState('');
   const [pickerItem, setPickerItem] = useState(null);
+  const [cartOpen, setCartOpen] = useState(false); // mobile cart drawer
 
   useEffect(() => watchCategories(setCats), []);
   useEffect(() => watchMenuItems(setItems), []);
-
   useEffect(() => {
     if (!activeCat && cats.length) setActiveCat(cats[0].id);
   }, [cats, activeCat]);
@@ -65,116 +51,203 @@ export default function OrderPane({
   const subtotal = allLines.reduce((s, l) => s + l.price * l.qty, 0);
   const gst = +(subtotal * (gstPct / (100 + gstPct))).toFixed(2);
   const total = +subtotal.toFixed(2);
+  const itemCount = cartItems.reduce((n, l) => n + l.qty, 0)
+                  + sentItems.reduce((n, l) => n + l.qty, 0);
 
-  return (
-    <div className="order-screen">
-      <div className="menu-pane">
-        <div className="menu-search">
-          <input
-            placeholder="Search menu…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="menu-cat-bar">
-          {cats.map(c => (
-            <button
-              key={c.id}
-              className={`cat-chip ${activeCat === c.id && !search ? 'active' : ''}`}
-              onClick={() => { setActiveCat(c.id); setSearch(''); }}
-              style={activeCat === c.id && !search ? { borderColor: c.color, color: c.color } : {}}
-            >{c.name}</button>
-          ))}
-        </div>
-        <div className="menu-items-grid">
-          {filteredItems.map(it => {
-            const hasOptions = (it.modifierGroupIds || []).length > 0;
-            return (
-              <button key={it.id} className="menu-item-card" onClick={() => handleItemTap(it)}>
-                <div>
-                  <div className="station">
-                    {it.station}
-                    {hasOptions && <span style={{
-                      marginLeft: 6, color: 'var(--brand)', fontSize: 9,
-                      letterSpacing: '0.1em'
-                    }}>· OPTIONS</span>}
+  const cartContent = (
+    <>
+      {header}
+      <div className="cart-items">
+        {allLines.length === 0 ? (
+          <div className="cart-empty">
+            <div className="icon">🍽</div>
+            <p>Tap menu items to start an order</p>
+          </div>
+        ) : allLines.map((line, i) => {
+          const isSent = line._sent;
+          const cartIndex = isSent ? -1 : i - sentItems.length;
+          const selections = line.selections || [];
+          return (
+            <div key={i} className={`cart-row ${isSent ? 'sent' : ''}`}>
+              {isSent
+                ? <span className="qty">{line.qty}×</span>
+                : <span className="qty" onClick={() => onQtyChange(cartIndex, line.qty + 1)} style={{ cursor: 'pointer' }}>
+                    {line.qty}×
+                  </span>
+              }
+              <div className="name">
+                {line.name}
+                {isSent && <span className="badge">sent</span>}
+                {selections.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, lineHeight: 1.4 }}>
+                    {selections.map(s => s.label).join(' · ')}
                   </div>
-                  <div className="name">{it.name}</div>
-                </div>
-                <div className="price">
-                  ${it.price.toFixed(2)}
-                  {hasOptions && <span style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 400 }}> +</span>}
-                </div>
-              </button>
-            );
-          })}
-          {filteredItems.length === 0 && (
-            <div className="empty" style={{ gridColumn: '1 / -1' }}>
-              <p>No items match.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="cart">
-        {header}
-        <div className="cart-items">
-          {allLines.length === 0 ? (
-            <div className="cart-empty">
-              <div className="icon">🍽</div>
-              <p>Tap menu items to start an order</p>
-            </div>
-          ) : allLines.map((line, i) => {
-            const isSent = line._sent;
-            const cartIndex = isSent ? -1 : i - sentItems.length;
-            const selections = line.selections || [];
-            return (
-              <div key={i} className={`cart-row ${isSent ? 'sent' : ''}`}>
-                {isSent
-                  ? <span className="qty">{line.qty}×</span>
-                  : <span className="qty" onClick={() => onQtyChange(cartIndex, line.qty + 1)} style={{ cursor: 'pointer' }} title="Tap to +1">
-                      {line.qty}×
-                    </span>
-                }
-                <div className="name">
-                  {line.name}
-                  {isSent && <span className="badge">sent</span>}
-                  {selections.length > 0 && (
-                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, lineHeight: 1.4 }}>
-                      {selections.map(s => s.label).join(' · ')}
-                    </div>
-                  )}
-                  {line.notes && (
-                    <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2, fontStyle: 'italic' }}>
-                      ↳ {line.notes}
-                    </div>
-                  )}
-                </div>
-                <div className="price">${(line.price * line.qty).toFixed(2)}</div>
-                {!isSent && (
-                  <button className="rm" onClick={() => onRemove(cartIndex)}>×</button>
+                )}
+                {line.notes && (
+                  <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2, fontStyle: 'italic' }}>
+                    ↳ {line.notes}
+                  </div>
                 )}
               </div>
-            );
-          })}
+              <div className="price">${(line.price * line.qty).toFixed(2)}</div>
+              {!isSent && (
+                <button className="rm" onClick={() => onRemove(cartIndex)}>×</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="cart-totals">
+        <div className="line"><span>Subtotal (ex GST)</span><span>${(total - gst).toFixed(2)}</span></div>
+        <div className="line"><span>GST ({gstPct}%)</span><span>${gst.toFixed(2)}</span></div>
+        <div className="line total"><span>Total</span><span>${total.toFixed(2)}</span></div>
+      </div>
+      {footer}
+    </>
+  );
+
+  return (
+    <>
+      {/* ── Desktop: side-by-side ── */}
+      <div className="order-screen order-screen--desktop">
+        <div className="menu-pane">
+          <div className="menu-search">
+            <input placeholder="Search menu…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="menu-cat-bar">
+            {cats.map(c => (
+              <button key={c.id}
+                className={`cat-chip ${activeCat === c.id && !search ? 'active' : ''}`}
+                onClick={() => { setActiveCat(c.id); setSearch(''); }}
+                style={activeCat === c.id && !search ? { borderColor: c.color, color: c.color } : {}}
+              >{c.name}</button>
+            ))}
+          </div>
+          <div className="menu-items-grid">
+            {filteredItems.map(it => <MenuItemCard key={it.id} item={it} onTap={handleItemTap} />)}
+            {filteredItems.length === 0 && <div className="empty" style={{ gridColumn: '1/-1' }}><p>No items match.</p></div>}
+          </div>
+        </div>
+        <div className="cart">{cartContent}</div>
+      </div>
+
+      {/* ── Mobile: full-screen menu + sticky cart bar ── */}
+      <div className="order-screen--mobile">
+        {/* Full-height menu */}
+        <div className="mobile-menu">
+          <div className="menu-search">
+            <input placeholder="Search menu…" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="menu-cat-bar">
+            {cats.map(c => (
+              <button key={c.id}
+                className={`cat-chip ${activeCat === c.id && !search ? 'active' : ''}`}
+                onClick={() => { setActiveCat(c.id); setSearch(''); }}
+                style={activeCat === c.id && !search ? { borderColor: c.color, color: c.color } : {}}
+              >{c.name}</button>
+            ))}
+          </div>
+          <div className="menu-items-grid">
+            {filteredItems.map(it => <MenuItemCard key={it.id} item={it} onTap={handleItemTap} />)}
+            {filteredItems.length === 0 && <div className="empty" style={{ gridColumn: '1/-1' }}><p>No items match.</p></div>}
+          </div>
         </div>
 
-        <div className="cart-totals">
-          <div className="line"><span>Subtotal (ex GST)</span><span>${(total - gst).toFixed(2)}</span></div>
-          <div className="line"><span>GST ({gstPct}%)</span><span>${gst.toFixed(2)}</span></div>
-          <div className="line total"><span>Total</span><span>${total.toFixed(2)}</span></div>
+        {/* Sticky bottom bar — always visible, tap to expand cart */}
+        <div className="mobile-cart-bar" onClick={() => itemCount > 0 && setCartOpen(true)}>
+          <div className="mobile-cart-bar-left">
+            {itemCount > 0
+              ? <span className="mobile-cart-count">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+              : <span style={{ color: 'var(--text-3)', fontSize: 13 }}>No items yet</span>
+            }
+            {itemCount > 0 && <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 6 }}>tap to review</span>}
+          </div>
+          <div className="mobile-cart-bar-right">
+            {total > 0 && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--brand)', fontSize: 16 }}>
+                ${total.toFixed(2)}
+              </span>
+            )}
+          </div>
         </div>
 
-        {footer}
+        {/* Cart drawer sheet */}
+        {cartOpen && (
+          <div className="mobile-cart-overlay" onClick={() => setCartOpen(false)}>
+            <div className="mobile-cart-sheet" onClick={e => e.stopPropagation()}>
+              <div className="mobile-cart-handle-bar">
+                <div className="handle" />
+              </div>
+              {/* Cart content */}
+              {header && (
+                <div style={{ padding: '0 0 0', borderBottom: '1px solid var(--border)' }}>
+                  {header}
+                </div>
+              )}
+              <div className="cart-items" style={{ flex: 1, overflowY: 'auto' }}>
+                {allLines.length === 0 ? (
+                  <div className="cart-empty"><div className="icon">🍽</div><p>Tap menu items to start an order</p></div>
+                ) : allLines.map((line, i) => {
+                  const isSent = line._sent;
+                  const cartIndex = isSent ? -1 : i - sentItems.length;
+                  const selections = line.selections || [];
+                  return (
+                    <div key={i} className={`cart-row ${isSent ? 'sent' : ''}`}>
+                      {isSent
+                        ? <span className="qty">{line.qty}×</span>
+                        : <span className="qty" onClick={() => onQtyChange(cartIndex, line.qty + 1)} style={{ cursor: 'pointer' }}>{line.qty}×</span>
+                      }
+                      <div className="name">
+                        {line.name}
+                        {isSent && <span className="badge">sent</span>}
+                        {selections.length > 0 && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{selections.map(s => s.label).join(' · ')}</div>}
+                        {line.notes && <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2, fontStyle: 'italic' }}>↳ {line.notes}</div>}
+                      </div>
+                      <div className="price">${(line.price * line.qty).toFixed(2)}</div>
+                      {!isSent && <button className="rm" onClick={() => onRemove(cartIndex)}>×</button>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="cart-totals">
+                <div className="line"><span>Subtotal (ex GST)</span><span>${(total - gst).toFixed(2)}</span></div>
+                <div className="line"><span>GST ({gstPct}%)</span><span>${gst.toFixed(2)}</span></div>
+                <div className="line total"><span>Total</span><span>${total.toFixed(2)}</span></div>
+              </div>
+              {/* Replace footer actions with full-width ones */}
+              <div className="mobile-cart-actions">
+                <button className="btn btn-block" style={{ background: 'var(--surface-3)', marginBottom: 8 }} onClick={() => setCartOpen(false)}>
+                  ← Continue ordering
+                </button>
+                {footer}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {pickerItem && (
-        <ModifierPicker
-          item={pickerItem}
-          onCancel={() => setPickerItem(null)}
-          onConfirm={handlePickerConfirm}
-        />
+        <ModifierPicker item={pickerItem} onCancel={() => setPickerItem(null)} onConfirm={handlePickerConfirm} />
       )}
-    </div>
+    </>
+  );
+}
+
+function MenuItemCard({ item: it, onTap }) {
+  const hasOptions = (it.modifierGroupIds || []).length > 0;
+  return (
+    <button className="menu-item-card" onClick={() => onTap(it)}>
+      <div>
+        <div className="station">
+          {it.station}
+          {hasOptions && <span style={{ marginLeft: 5, color: 'var(--brand)', fontSize: 9, letterSpacing: '0.1em' }}>· OPTIONS</span>}
+        </div>
+        <div className="name">{it.name}</div>
+      </div>
+      <div className="price">
+        ${it.price.toFixed(2)}
+        {hasOptions && <span style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 400 }}> +</span>}
+      </div>
+    </button>
   );
 }

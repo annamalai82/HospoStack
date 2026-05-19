@@ -1189,6 +1189,123 @@ main { overflow: hidden; min-height: 0; }
 .connection-pill.reconnecting .dot { background: var(--amber); animation: spin 800ms linear infinite; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE CART DRAWER PATTERN
+   Desktop: order-screen--desktop shown, order-screen--mobile hidden
+   Mobile:  order-screen--desktop hidden, order-screen--mobile shown
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Desktop layout — hidden on mobile */
+.order-screen--desktop {
+  display: none;
+}
+@media (min-width: 768px) {
+  .order-screen--desktop {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+  }
+  .order-screen--desktop .menu-pane {
+    flex: 1; display: flex; flex-direction: column; gap: 8px;
+    padding: 10px; overflow: hidden; border-right: 1px solid var(--border);
+  }
+  .order-screen--desktop .cart {
+    width: 360px; flex: 0 0 360px; display: flex; flex-direction: column;
+    background: var(--surface); overflow: hidden;
+  }
+}
+@media (min-width: 1100px) {
+  .order-screen--desktop .cart { width: 420px; flex: 0 0 420px; }
+}
+
+/* Mobile layout — hidden on desktop */
+.order-screen--mobile {
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden;
+  position: relative;
+}
+@media (min-width: 768px) {
+  .order-screen--mobile { display: none; }
+}
+
+/* Full-height menu on mobile */
+.mobile-menu {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 10px 0; overflow: hidden;
+}
+.mobile-menu .menu-items-grid {
+  flex: 1; overflow-y: auto;
+}
+
+/* Sticky cart bar at bottom of mobile menu */
+.mobile-cart-bar {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-top: 2px solid var(--brand);
+  cursor: pointer;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  min-height: 56px;
+  gap: 12px;
+}
+.mobile-cart-bar:active { background: var(--surface-3); }
+
+.mobile-cart-bar-left { display: flex; align-items: center; gap: 0; }
+.mobile-cart-count {
+  background: var(--brand); color: #18120e;
+  font-weight: 700; font-size: 13px;
+  padding: 4px 10px; border-radius: 999px;
+  margin-right: 8px;
+}
+.mobile-cart-bar-right { flex-shrink: 0; }
+
+/* Cart drawer overlay */
+.mobile-cart-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fadeIn 180ms ease;
+}
+.mobile-cart-sheet {
+  width: 100%; max-height: 90dvh;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-lg);
+}
+.mobile-cart-handle-bar {
+  display: flex; justify-content: center; padding: 10px 0 6px;
+  flex-shrink: 0;
+  background: var(--bg-2);
+}
+.mobile-cart-handle-bar .handle {
+  width: 36px; height: 4px; border-radius: 999px;
+  background: var(--border-strong);
+}
+.mobile-cart-actions {
+  padding: 12px 14px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+  flex-shrink: 0;
+}
+.mobile-cart-actions .cart-actions {
+  padding: 0;
+}
+
+/* Collapsed empty tabs on mobile */
+.tabs-pane--empty {
+  max-height: 48px !important; /* just the header */
+  overflow: hidden;
+}
+.tabs-empty-msg {
+  display: none; /* hidden since pane is collapsed */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    VOUCHER / MISC
    ═══════════════════════════════════════════════════════════════════════════ */
 .payment-chip {

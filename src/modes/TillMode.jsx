@@ -251,9 +251,9 @@ export default function TillMode() {
 function OpenTabsPane({ tabs, tables, activeId, onSelect, onPay }) {
   if (tabs.length === 0) {
     return (
-      <aside className="tabs-pane">
+      <aside className="tabs-pane tabs-pane--empty">
         <div className="panel-head"><span className="panel-title">Open Tabs</span></div>
-        <div className="cart-empty"><div className="icon">☕</div><p>No open tabs.<br />Start an order on the left.</p></div>
+        <div className="tabs-empty-msg">No open tabs yet</div>
       </aside>
     );
   }
