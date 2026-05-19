@@ -43,21 +43,27 @@
 
 /* ── Reset ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { height: 100%; }
+html, body, #root { height: 100%; }
 body {
-  height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-display);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
-  /* Allow natural page scroll */
+  /* Mobile: natural page scroll */
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* Desktop: viewport-contained, each panel manages its own scroll */
+@media (min-width: 768px) {
+  body { overflow: hidden; }
+}
 #root { min-height: 100%; }
+@media (min-width: 768px) {
+  #root { height: 100%; min-height: unset; overflow: hidden; }
+}
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 button { background: none; border: none; cursor: pointer; }
 input, textarea, select {
@@ -90,13 +96,32 @@ input:focus, textarea:focus, select:focus { border-color: var(--brand); }
 }
 
 /* Push content below fixed topbar */
-.app { padding-top: var(--bar); min-height: 100dvh; background: var(--bg); }
-.app--with-bg {
+.app {
+  padding-top: var(--bar);
+  min-height: 100dvh;
   background:
     radial-gradient(1200px 600px at 80% -10%, rgba(255,122,69,0.06), transparent 60%),
     var(--bg);
 }
-main { /* no overflow, no height — just flows naturally */ }
+@media (min-width: 768px) {
+  .app {
+    height: 100%;
+    min-height: unset;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+}
+main {
+  /* Mobile: natural flow */
+}
+@media (min-width: 768px) {
+  main {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+}
 
 /* ── Brand ─────────────────────────────────────────────────────────────── */
 .brand {
@@ -296,11 +321,26 @@ main { /* no overflow, no height — just flows naturally */ }
    Natural-height tickets in a scrolling page — no viewport tricks
    ══════════════════════════════════════════════════════════════════════════ */
 .kds { padding: 10px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+@media (min-width: 768px) {
+  .kds {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 10px;
+  }
+}
 
 .kds-toolbar {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
   padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); margin-bottom: 12px; position: sticky; top: var(--bar); z-index: 10;
+  border-radius: var(--radius); margin-bottom: 12px;
+  /* Sticky on mobile so filters stay visible while page scrolls */
+  position: sticky; top: var(--bar); z-index: 10;
+}
+@media (min-width: 768px) {
+  /* On desktop the KDS has internal scroll — toolbar just stays at top */
+  .kds-toolbar { position: static; flex-shrink: 0; }
 }
 .kds-filter { display: flex; gap: 6px; flex-wrap: wrap; }
 .kds-filter button { padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); min-height: var(--tap); }
@@ -308,16 +348,25 @@ main { /* no overflow, no height — just flows naturally */ }
 .kds-stats { display: flex; gap: 14px; font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
 .kds-stats b { color: var(--text); font-weight: 600; }
 
-/* Grid of tickets — just a grid, no overflow, no height constraints */
+/* Grid of tickets — natural flow on mobile, scrolling on desktop */
 .kds-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
-  align-items: start; /* don't stretch tickets to equal height */
+  align-items: start;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
 }
 @media (min-width: 640px)  { .kds-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1024px) { .kds-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (min-width: 1400px) { .kds-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 768px) {
+  .kds-grid {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 10px;
+  }
+}
 
 .kds-ticket {
   background: var(--surface); border: 1px solid var(--border);
@@ -350,6 +399,9 @@ main { /* no overflow, no height — just flows naturally */ }
    FLOOR MODE
    ══════════════════════════════════════════════════════════════════════════ */
 .floor { }
+@media (min-width: 768px) {
+  .floor { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+}
 
 .floor-toolbar {
   position: sticky; top: var(--bar); z-index: 10;
@@ -358,6 +410,9 @@ main { /* no overflow, no height — just flows naturally */ }
   background: rgba(11,13,16,0.92); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
 }
+@media (min-width: 768px) {
+  .floor-toolbar { position: static; flex-shrink: 0; }
+}
 .zone-tabs { display: flex; gap: 6px; overflow-x: auto; }
 .zone-tabs::-webkit-scrollbar { display: none; }
 .zone-tabs button { padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text-2); white-space: nowrap; min-height: var(--tap); }
@@ -365,7 +420,7 @@ main { /* no overflow, no height — just flows naturally */ }
 .floor-stats { display: flex; gap: 12px; font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
 .floor-stats b { color: var(--text); }
 
-/* Table grid — just flows naturally */
+/* Table grid — natural flow on mobile, scrollable on desktop */
 .table-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -373,7 +428,13 @@ main { /* no overflow, no height — just flows naturally */ }
   padding-bottom: max(20px, env(safe-area-inset-bottom));
 }
 @media (min-width: 480px) { .table-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (min-width: 768px) { .table-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } }
+@media (min-width: 768px) {
+  .table-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    align-content: start; padding-bottom: 10px;
+  }
+}
 
 .table-card {
   aspect-ratio: 1; background: var(--surface); border: 1px solid var(--border);
@@ -411,18 +472,21 @@ main { /* no overflow, no height — just flows naturally */ }
   .order-screen--desktop {
     display: grid;
     grid-template-columns: 1fr 360px;
-    min-height: calc(100dvh - var(--bar));
+    height: 100%;
+    overflow: hidden;
   }
   .order-screen--desktop .menu-pane {
     padding: 10px; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 8px;
+    overflow: hidden; /* children scroll */
+  }
+  .order-screen--desktop .menu-pane .menu-items-grid {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
   }
   .order-screen--desktop .cart {
-    /* Sticky so it doesn't scroll with the menu */
-    position: sticky; top: var(--bar);
-    height: calc(100dvh - var(--bar));
-    display: flex; flex-direction: column;
-    overflow: hidden;
-    background: var(--surface);
+    height: 100%; display: flex; flex-direction: column;
+    overflow: hidden; background: var(--surface);
   }
 }
 @media (min-width: 1100px) { .order-screen--desktop { grid-template-columns: 1fr 420px; } }
@@ -547,12 +611,23 @@ main { /* no overflow, no height — just flows naturally */ }
    TILL MODE
    ══════════════════════════════════════════════════════════════════════════ */
 .till { }
+@media (min-width: 768px) {
+  .till { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+}
 
 /* Desktop: side-by-side with open tabs */
 .till-layout { }
 @media (min-width: 900px) {
-  .till-layout { display: grid; grid-template-columns: 1fr 280px; min-height: calc(100dvh - var(--bar)); }
-  .tabs-pane { border-left: 1px solid var(--border); background: var(--bg-2); position: sticky; top: var(--bar); height: calc(100dvh - var(--bar)); display: flex; flex-direction: column; overflow: hidden; }
+  .till-layout {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 280px; overflow: hidden;
+  }
+  .till-layout .order-screen--desktop { height: 100%; }
+  .till-layout .order-screen--mobile { display: none; }
+  .tabs-pane {
+    border-left: 1px solid var(--border); background: var(--bg-2);
+    height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  }
 }
 
 /* Mobile: horizontal tab strip at bottom */
@@ -678,7 +753,16 @@ main { /* no overflow, no height — just flows naturally */ }
   display: flex; flex-direction: column;
 }
 @media (min-width: 768px) {
-  .hub { inset: var(--bar) 0 0 auto; width: min(1100px, 100vw); border-left: 1px solid var(--border); display: grid; grid-template-columns: 220px 1fr; grid-template-rows: auto; overflow: hidden; }
+  .hub {
+    inset: var(--bar) 0 0 auto;
+    width: min(1100px, 100vw);
+    border-left: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: auto 1fr;
+    overflow: hidden; /* children scroll internally */
+    height: calc(100dvh - var(--bar));
+  }
 }
 
 .hub-head { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 50px; border-bottom: 1px solid var(--border); background: var(--bg-2); flex-shrink: 0; }
