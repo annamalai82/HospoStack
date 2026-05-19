@@ -6,6 +6,7 @@ import {
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
+import { VoidConfirmModal } from './TillMode';
 
 export default function FloorMode() {
   const { device } = useDevice();
@@ -19,6 +20,7 @@ export default function FloorMode() {
   const [showBookings, setShowBookings] = useState(false);
   const [venue, setVenue] = useState(null);
   const [tick, setTick] = useState(0);
+  const [showVoidConfirm, setShowVoidConfirm] = useState(false);
 
   useEffect(() => watchTables(setTables), []);
   useEffect(() => watchOpenOrders(setOrders), []);
@@ -163,6 +165,22 @@ export default function FloorMode() {
     handleCloseEditor();
   };
 
+  // ── Void order ────────────────────────────────────────────────────────
+  const handleVoid = async () => {
+    const existing = orderForTable(openTable?.id);
+    if (!existing) return;
+    await updateOrder(existing.id, {
+      status: 'voided',
+      voidedAt: new Date(),
+      clearedFromKitchen: true
+    });
+    await updateTableStatus(openTable.id, 'free');
+    setCart([]);
+    setShowVoidConfirm(false);
+    handleCloseEditor();
+    showToast('Order voided', 'error');
+  };
+
   // ── Render: editor or grid ───────────────────────────────────────────
   if (openTable) {
     const existing = orderForTable(openTable.id);
@@ -181,7 +199,13 @@ export default function FloorMode() {
           header={
             <div className="cart-head">
               <div className="tbl">Table <b>{openTable.number}</b></div>
-              <div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {existing && (
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => setShowVoidConfirm(true)}
+                  >🚫 Void</button>
+                )}
                 <button className="btn-ghost" onClick={handleCloseEditor}>← Back</button>
               </div>
             </div>
@@ -207,6 +231,13 @@ export default function FloorMode() {
             </div>
           }
         />
+        {showVoidConfirm && existing && (
+          <VoidConfirmModal
+            order={existing}
+            onCancel={() => setShowVoidConfirm(false)}
+            onConfirm={handleVoid}
+          />
+        )}
       </>
     );
   }

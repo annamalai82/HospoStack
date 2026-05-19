@@ -756,6 +756,17 @@ main {
 .tab-total { font-family: var(--font-mono); color: var(--text); font-weight: 500; }
 .tab-pay   { border-left: 1px solid var(--border); padding: 0 14px; font-size: 20px; background: var(--surface-2); }
 .tab-pay:active { background: var(--green-deep); }
+.tab-actions {
+  display: flex; flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+.tab-void {
+  flex: 1; padding: 0 12px; font-size: 16px;
+  background: var(--surface-2); border-top: 1px solid var(--border);
+  color: var(--text-3);
+}
+.tab-void:active { background: var(--red-deep); color: var(--red); }
+.tab-actions .tab-pay { flex: 1; border-left: none; border-bottom: none; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    PAYMENT SCREEN (modal / sheet)

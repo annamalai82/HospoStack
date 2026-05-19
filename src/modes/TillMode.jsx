@@ -191,7 +191,27 @@ export default function TillMode() {
     }
   };
 
-  // ── Render ───────────────────────────────────────────────────────────
+  const [showVoidConfirm, setShowVoidConfirm] = useState(false);
+
+  // ── Void order ────────────────────────────────────────────────────────
+  const handleVoid = async () => {
+    if (!activeOrder) return;
+    await updateOrder(activeOrder.id, {
+      status: 'voided',
+      voidedAt: new Date(),
+      voidedBy: device.user.id,
+      clearedFromKitchen: true
+    });
+    if (activeOrder.tableId) {
+      await updateTableStatus(activeOrder.tableId, 'free');
+    }
+    setCart([]);
+    setActiveOrderId(null);
+    setShowPay(false);
+    setShowVoidConfirm(false);
+    showToast('Order voided', 'error');
+  };
+  // ── Render ────────────────────────────────────────────────────────────
   const sentItems = activeOrder?.items || [];
   const headerContent = (
     <div className="cart-head">
@@ -203,7 +223,14 @@ export default function TillMode() {
           : <>{orderType === 'takeaway' ? 'New Takeaway' : 'Counter / Dine-in'}</>
         }
       </div>
-      <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {activeOrder && (
+          <button
+            className="btn btn-danger btn-sm"
+            onClick={() => setShowVoidConfirm(true)}
+            title="Void this order"
+          >🚫 Void</button>
+        )}
         {!activeOrder ? (
           <select
             value={orderType}
@@ -269,6 +296,16 @@ export default function TillMode() {
           alertMins={alertMins}
           onSelect={(o) => { setActiveOrderId(o.id); setCart([]); }}
           onPay={(o) => handleTakePayment(o)}
+          onVoidTab={async (o) => {
+            await updateOrder(o.id, {
+              status: 'voided',
+              voidedAt: new Date(),
+              clearedFromKitchen: true
+            });
+            if (o.tableId) await updateTableStatus(o.tableId, 'free');
+            if (activeOrderId === o.id) { setActiveOrderId(null); setCart([]); }
+            showToast('Order voided', 'error');
+          }}
         />
       </div>
 
@@ -276,7 +313,16 @@ export default function TillMode() {
         <PayScreen
           order={activeOrder}
           onCancel={() => setShowPay(false)}
+          onVoid={() => { setShowPay(false); setShowVoidConfirm(true); }}
           onComplete={handlePaid}
+        />
+      )}
+
+      {showVoidConfirm && activeOrder && (
+        <VoidConfirmModal
+          order={activeOrder}
+          onCancel={() => setShowVoidConfirm(false)}
+          onConfirm={handleVoid}
         />
       )}
     </div>
@@ -284,7 +330,9 @@ export default function TillMode() {
 }
 
 // ── Open tabs sidebar ────────────────────────────────────────────────────
-function OpenTabsPane({ tabs, tables, activeId, alertMins = 20, onSelect, onPay }) {
+function OpenTabsPane({ tabs, tables, activeId, alertMins = 20, onSelect, onPay, onVoidTab }) {
+  const [voidTarget, setVoidTarget] = useState(null);
+
   if (tabs.length === 0) {
     return (
       <aside className="tabs-pane tabs-pane--empty">
@@ -323,20 +371,28 @@ function OpenTabsPane({ tabs, tables, activeId, alertMins = 20, onSelect, onPay 
                   <span>{(o.items || []).length} items</span>
                   <span className="tab-total">${(o.total || 0).toFixed(2)}</span>
                 </div>
-                {/* Wait time */}
                 {waitMins !== null && (
                   <div className={`tab-wait ${isOverdue ? 'overdue' : isWarn ? 'warn' : ''}`}>
                     ⏱ {waitMins}m waiting
                   </div>
                 )}
               </button>
-              <button className="tab-pay" onClick={() => onPay(o)} title="Take payment">
-                💳
-              </button>
+              <div className="tab-actions">
+                <button className="tab-pay" onClick={() => onPay(o)} title="Take payment">💳</button>
+                <button className="tab-void" onClick={() => setVoidTarget(o)} title="Void order">🚫</button>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {voidTarget && (
+        <VoidConfirmModal
+          order={voidTarget}
+          onCancel={() => setVoidTarget(null)}
+          onConfirm={async () => { await onVoidTab(voidTarget); setVoidTarget(null); }}
+        />
+      )}
     </aside>
   );
 }
@@ -350,7 +406,7 @@ function statusLabel(o) {
 }
 
 // ── Payment screen ───────────────────────────────────────────────────────
-function PayScreen({ order, onCancel, onComplete }) {
+function PayScreen({ order, onCancel, onVoid, onComplete }) {
   const total = order.total || 0;
   const [payments, setPayments] = useState(order.payments || []);
   const [amount, setAmount] = useState('');
@@ -493,6 +549,11 @@ function PayScreen({ order, onCancel, onComplete }) {
             )}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
+            {onVoid && (
+              <button className="btn btn-danger btn-sm" onClick={onVoid} title="Void this order">
+                🚫 Void Order
+              </button>
+            )}
             <button className="btn-ghost" onClick={onCancel}>Cancel</button>
             <button
               className="btn btn-success"
@@ -684,4 +745,60 @@ function calcTotals(items) {
   const total = +subtotal.toFixed(2);
   const gst = +(subtotal * (10 / 110)).toFixed(2);
   return { subtotal: +subtotal.toFixed(2), gst, total };
+}
+
+// ── Void confirm modal ───────────────────────────────────────────────────
+export function VoidConfirmModal({ order, onCancel, onConfirm }) {
+  const [busy, setBusy] = useState(false);
+  const label = order?.tableId
+    ? `Table ${order.tableNumber || order.tableId.replace('t','')}`
+    : order?.id ? `#${order.id.slice(-4).toUpperCase()}` : 'this order';
+  const total = order?.total || 0;
+
+  const confirm = async () => {
+    setBusy(true);
+    try { await onConfirm(); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 80 }} onClick={onCancel}>
+      <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-head" style={{ background: 'var(--red-deep)', borderColor: 'rgba(248,113,113,0.3)' }}>
+          <h3 style={{ color: 'var(--red)' }}>🚫 Void Order</h3>
+          <button className="icon-btn" onClick={onCancel}>×</button>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, lineHeight: 1.5 }}>
+            Are you sure you want to void <b>{label}</b>?
+          </p>
+          {total > 0 && (
+            <div style={{
+              background: 'var(--red-deep)', border: '1px solid rgba(248,113,113,0.25)',
+              borderRadius: 10, padding: '14px 18px', marginBottom: 16,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <span style={{ color: 'var(--text-2)', fontSize: 14 }}>Order total</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color: 'var(--red)' }}>
+                ${total.toFixed(2)}
+              </span>
+            </div>
+          )}
+          <div style={{
+            background: 'var(--surface-2)', borderRadius: 8, padding: 12,
+            fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6
+          }}>
+            This will cancel the order and remove it from the Kitchen Display.
+            {order?.tableId && ' The table will be freed.'} This cannot be undone.
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button className="btn-ghost" onClick={onCancel} disabled={busy}>Keep Order</button>
+          <button className="btn btn-danger btn-lg" onClick={confirm} disabled={busy}>
+            {busy ? 'Voiding…' : '🚫 Yes, Void Order'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
