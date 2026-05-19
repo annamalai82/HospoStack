@@ -54,6 +54,8 @@ export default function OrderPane({
   const itemCount = cartItems.reduce((n, l) => n + l.qty, 0)
                   + sentItems.reduce((n, l) => n + l.qty, 0);
 
+  const [editingIndex, setEditingIndex] = useState(null); // which cart row is in edit mode
+
   const cartContent = (
     <>
       {header}
@@ -61,39 +63,28 @@ export default function OrderPane({
         {allLines.length === 0 ? (
           <div className="cart-empty">
             <div className="icon">🍽</div>
-            <p>Tap menu items to start an order</p>
+            <p>Tap menu items to add to order</p>
           </div>
         ) : allLines.map((line, i) => {
           const isSent = line._sent;
           const cartIndex = isSent ? -1 : i - sentItems.length;
-          const selections = line.selections || [];
+          const isEditing = !isSent && editingIndex === cartIndex;
+
           return (
-            <div key={i} className={`cart-row ${isSent ? 'sent' : ''}`}>
-              {isSent
-                ? <span className="qty">{line.qty}×</span>
-                : <span className="qty" onClick={() => onQtyChange(cartIndex, line.qty + 1)} style={{ cursor: 'pointer' }}>
-                    {line.qty}×
-                  </span>
-              }
-              <div className="name">
-                {line.name}
-                {isSent && <span className="badge">sent</span>}
-                {selections.length > 0 && (
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, lineHeight: 1.4 }}>
-                    {selections.map(s => s.label).join(' · ')}
-                  </div>
-                )}
-                {line.notes && (
-                  <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2, fontStyle: 'italic' }}>
-                    ↳ {line.notes}
-                  </div>
-                )}
-              </div>
-              <div className="price">${(line.price * line.qty).toFixed(2)}</div>
-              {!isSent && (
-                <button className="rm" onClick={() => onRemove(cartIndex)}>×</button>
-              )}
-            </div>
+            <CartRow
+              key={i}
+              line={line}
+              isSent={isSent}
+              isEditing={isEditing}
+              onEdit={() => { if (!isSent) setEditingIndex(cartIndex); }}
+              onDone={() => setEditingIndex(null)}
+              onInc={() => onQtyChange(cartIndex, line.qty + 1)}
+              onDec={() => {
+                if (line.qty <= 1) { onRemove(cartIndex); setEditingIndex(null); }
+                else onQtyChange(cartIndex, line.qty - 1);
+              }}
+              onRemove={() => { onRemove(cartIndex); setEditingIndex(null); }}
+            />
           );
         })}
       </div>
@@ -184,28 +175,28 @@ export default function OrderPane({
                   {header}
                 </div>
               )}
-              <div className="cart-items" style={{ flex: 1, overflowY: 'auto' }}>
+              <div className="cart-items" style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 {allLines.length === 0 ? (
-                  <div className="cart-empty"><div className="icon">🍽</div><p>Tap menu items to start an order</p></div>
+                  <div className="cart-empty"><div className="icon">🍽</div><p>Tap menu items to add to order</p></div>
                 ) : allLines.map((line, i) => {
                   const isSent = line._sent;
                   const cartIndex = isSent ? -1 : i - sentItems.length;
-                  const selections = line.selections || [];
+                  const isEditing = !isSent && editingIndex === cartIndex;
                   return (
-                    <div key={i} className={`cart-row ${isSent ? 'sent' : ''}`}>
-                      {isSent
-                        ? <span className="qty">{line.qty}×</span>
-                        : <span className="qty" onClick={() => onQtyChange(cartIndex, line.qty + 1)} style={{ cursor: 'pointer' }}>{line.qty}×</span>
-                      }
-                      <div className="name">
-                        {line.name}
-                        {isSent && <span className="badge">sent</span>}
-                        {selections.length > 0 && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{selections.map(s => s.label).join(' · ')}</div>}
-                        {line.notes && <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2, fontStyle: 'italic' }}>↳ {line.notes}</div>}
-                      </div>
-                      <div className="price">${(line.price * line.qty).toFixed(2)}</div>
-                      {!isSent && <button className="rm" onClick={() => onRemove(cartIndex)}>×</button>}
-                    </div>
+                    <CartRow
+                      key={i}
+                      line={line}
+                      isSent={isSent}
+                      isEditing={isEditing}
+                      onEdit={() => { if (!isSent) setEditingIndex(cartIndex); }}
+                      onDone={() => setEditingIndex(null)}
+                      onInc={() => onQtyChange(cartIndex, line.qty + 1)}
+                      onDec={() => {
+                        if (line.qty <= 1) { onRemove(cartIndex); setEditingIndex(null); }
+                        else onQtyChange(cartIndex, line.qty - 1);
+                      }}
+                      onRemove={() => { onRemove(cartIndex); setEditingIndex(null); }}
+                    />
                   );
                 })}
               </div>
@@ -249,5 +240,78 @@ function MenuItemCard({ item: it, onTap }) {
         {hasOptions && <span style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 400 }}> +</span>}
       </div>
     </button>
+  );
+}
+
+function CartRow({ line, isSent, isEditing, onEdit, onDone, onInc, onDec, onRemove }) {
+  const selections = line.selections || [];
+
+  if (isEditing) {
+    return (
+      <div className="cart-row cart-row--editing">
+        <div className="cart-row-edit-inner">
+          <div className="cart-edit-info">
+            <span className="cart-edit-name">{line.name}</span>
+            {selections.length > 0 && (
+              <div className="cart-edit-sel">{selections.map(s => s.label).join(' · ')}</div>
+            )}
+            {line.notes && <div className="cart-edit-notes">↳ {line.notes}</div>}
+            <div className="cart-edit-unit-price">${line.price.toFixed(2)} each</div>
+          </div>
+          <div className="cart-edit-controls">
+            {/* Delete button */}
+            <button className="cart-edit-delete" onClick={e => { e.stopPropagation(); onRemove(); }}>
+              <span>🗑</span>
+              <span>Remove</span>
+            </button>
+            {/* Stepper */}
+            <div className="cart-edit-stepper">
+              <button className="cart-edit-step dec" onClick={e => { e.stopPropagation(); onDec(); }}>−</button>
+              <span className="cart-edit-qty">{line.qty}</span>
+              <button className="cart-edit-step inc" onClick={e => { e.stopPropagation(); onInc(); }}>+</button>
+            </div>
+            {/* Subtotal + done */}
+            <div className="cart-edit-subtotal">${(line.price * line.qty).toFixed(2)}</div>
+            <button className="cart-edit-done" onClick={e => { e.stopPropagation(); onDone(); }}>✓ Done</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`cart-row ${isSent ? 'cart-row--sent' : 'cart-row--active'}`}
+      onClick={() => !isSent && onEdit()}
+    >
+      {/* Qty badge */}
+      <div className={`cart-qty-pill ${isSent ? '' : 'cart-qty-pill--tap'}`}>
+        {line.qty}
+      </div>
+
+      {/* Name + metadata */}
+      <div className="name" style={{ flex: 1 }}>
+        <span>{line.name}</span>
+        {isSent && <span className="badge" style={{ marginLeft: 6 }}>sent</span>}
+        {selections.length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, lineHeight: 1.4 }}>
+            {selections.map(s => s.label).join(' · ')}
+          </div>
+        )}
+        {line.notes && (
+          <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2, fontStyle: 'italic' }}>
+            ↳ {line.notes}
+          </div>
+        )}
+      </div>
+
+      {/* Price */}
+      <div className="price">${(line.price * line.qty).toFixed(2)}</div>
+
+      {/* Tap hint (non-sent items only) */}
+      {!isSent && (
+        <div className="cart-tap-hint">✎</div>
+      )}
+    </div>
   );
 }
