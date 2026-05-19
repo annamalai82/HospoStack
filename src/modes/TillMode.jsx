@@ -412,15 +412,16 @@ function OpenTabsPane({ tabs, tables, activeId, alertMins = 20, onSelect, onPay,
                   <span>{(o.items || []).length} items</span>
                   <span className="tab-total">${(o.total || 0).toFixed(2)}</span>
                 </div>
-                {/* Active time since opened */}
+                {/* Active time */}
                 {(() => {
                   const openMs = o.openedAt?.toMillis?.() || o.sentAt?.toMillis?.();
                   if (!openMs) return null;
                   const mins = Math.floor((Date.now() - openMs) / 60000);
-                  const color = mins >= alertMins ? 'var(--red)' : mins >= alertMins * 0.6 ? 'var(--amber)' : 'var(--text-3)';
+                  const isLong = mins >= alertMins;
+                  const isMid  = mins >= alertMins * 0.6 && !isLong;
                   return (
-                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color, marginTop: 2 }}>
-                      🕐 open {mins}m
+                    <div className={`tab-active-time ${isLong ? 'overdue' : isMid ? 'warn' : ''}`}>
+                      🕐 {mins}m
                     </div>
                   );
                 })()}
@@ -727,28 +728,31 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
   }
 
   // ── Standard payment screen ──────────────────────────────────────────
+  const openedMs = order.openedAt?.toMillis?.() || order.sentAt?.toMillis?.();
+  const activeMins = openedMs ? Math.floor((Date.now() - openedMs) / 60000) : null;
+
   return (
     <div className="pay-screen">
       <div className="pay-card">
         <div className="pay-head">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div>
             <h2>Payment</h2>
+            {activeMins !== null && (
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+                🕐 Table open {activeMins}m
+              </div>
+            )}
             {onEditOrder && (
-              <button
-                onClick={() => onEditOrder(payments)}
-                style={{ fontSize: 12, color: 'var(--blue)', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}
-              >
-                ✎ Edit order
+              <button className="btn-edit-order" onClick={() => onEditOrder(payments)}>
+                ✎ Edit order items
               </button>
             )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <div className="pay-head-right">
             <div className="total">${total.toFixed(2)}</div>
-            <button
-              className="btn btn-sm"
-              onClick={() => setStage('split')}
-              style={{ fontSize: 11, padding: '5px 10px' }}
-            >⇌ Split</button>
+            <button className="btn-split" onClick={() => { setSplitMode('persons'); setStage('split'); }}>
+              ⇌ Split payment
+            </button>
           </div>
         </div>
         <div className="pay-body">
