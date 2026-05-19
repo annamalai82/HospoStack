@@ -178,7 +178,7 @@ export default function FloorMode() {
             <button key={z} className={zone === z ? 'active' : ''} onClick={() => setZone(z)}>{z}</button>
           ))}
         </div>
-        <div className="kds-stats">
+        <div className="floor-stats">
           <span>Free: <b>{tables.filter(t => t.status === 'free').length}</b></span>
           <span>Occupied: <b>{tables.filter(t => t.status !== 'free').length}</b></span>
           {upcomingBookings.length > 0 && (

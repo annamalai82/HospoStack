@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { watchVenues, getVenueId, setVenueId, createVenueDoc } from '../lib/data';
 
-export default function VenueSwitcher() {
+export default function VenueSwitcher({ compact = false }) {
   const [venues, setVenues] = useState([]);
   const [open, setOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -17,15 +17,35 @@ export default function VenueSwitcher() {
     return () => window.removeEventListener('mousedown', onClickOut);
   }, [open]);
 
-  // Don't render at all if only one venue exists
+  const current = venues.find(v => v.id === currentId);
+  const name = current?.name || currentId;
+
+  // Compact mode: just show name (in the brand area)
+  if (compact) {
+    if (venues.length <= 1) {
+      return <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--text-2)' }}>{name}</span>;
+    }
+    return (
+      <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          onClick={() => setOpen(!open)}
+          style={{
+            fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--text-2)',
+            display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 4px', borderRadius: 4
+          }}
+        >
+          {name} <span style={{ fontSize: 9, color: 'var(--text-3)' }}>▼</span>
+        </button>
+        {open && <VenueDropdown venues={venues} currentId={currentId} onSwitch={(id) => { setOpen(false); switchTo(id); }} onCreate={() => { setOpen(false); setShowCreate(true); }} />}
+        {showCreate && <NewVenueModal onClose={() => setShowCreate(false)} onCreated={(id) => { setShowCreate(false); setVenueId(id); window.location.reload(); }} />}
+      </div>
+    );
+  }
+
+  // Don't render at all if only one venue exists (non-compact)
   if (venues.length <= 1 && !showCreate) {
     return (
-      <button
-        className="btn-ghost"
-        onClick={() => setShowCreate(true)}
-        title="Add a second venue"
-        style={{ fontSize: 11 }}
-      >
+      <button className="btn-ghost" onClick={() => setShowCreate(true)} title="Add a second venue" style={{ fontSize: 11 }}>
         + Add venue
       </button>
     );
@@ -34,53 +54,38 @@ export default function VenueSwitcher() {
   const switchTo = (id) => {
     if (id === currentId) { setOpen(false); return; }
     setVenueId(id);
-    // Clean reload — fresh subscriptions for the new venue
     setTimeout(() => window.location.reload(), 100);
   };
 
-  const current = venues.find(v => v.id === currentId);
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="venue-switcher-btn"
-        onClick={() => setOpen(!open)}
-      >
+      <button className="venue-switcher-btn" onClick={() => setOpen(!open)}>
         <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 14 }}>
-          {current?.name || currentId}
+          {name}
         </span>
         <span style={{ fontSize: 10, color: 'var(--text-3)', marginLeft: 4 }}>▼</span>
       </button>
 
-      {open && (
-        <div className="venue-dropdown">
-          <div className="venue-dropdown-label">Switch venue</div>
-          {venues.map(v => (
-            <button
-              key={v.id}
-              className={`venue-dropdown-item ${v.id === currentId ? 'active' : ''}`}
-              onClick={() => switchTo(v.id)}
-            >
-              <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>{v.name}</span>
-              {v.id === currentId && <span style={{ color: 'var(--green)' }}>✓</span>}
-            </button>
-          ))}
-          <div className="venue-dropdown-divider" />
-          <button
-            className="venue-dropdown-item"
-            onClick={() => { setOpen(false); setShowCreate(true); }}
-          >
-            <span style={{ color: 'var(--brand)' }}>+ New venue</span>
-          </button>
-        </div>
-      )}
+      {open && <VenueDropdown venues={venues} currentId={currentId} onSwitch={switchTo} onCreate={() => { setOpen(false); setShowCreate(true); }} />}
+      {showCreate && <NewVenueModal onClose={() => setShowCreate(false)} onCreated={(id) => { setShowCreate(false); setVenueId(id); window.location.reload(); }} />}
+    </div>
+  );
+}
 
-      {showCreate && (
-        <NewVenueModal
-          onClose={() => setShowCreate(false)}
-          onCreated={(id) => { setShowCreate(false); setVenueId(id); window.location.reload(); }}
-        />
-      )}
+function VenueDropdown({ venues, currentId, onSwitch, onCreate }) {
+  return (
+    <div className="venue-dropdown">
+      <div className="venue-dropdown-label">Switch venue</div>
+      {venues.map(v => (
+        <button key={v.id} className={`venue-dropdown-item ${v.id === currentId ? 'active' : ''}`} onClick={() => onSwitch(v.id)}>
+          <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>{v.name}</span>
+          {v.id === currentId && <span style={{ color: 'var(--green)' }}>✓</span>}
+        </button>
+      ))}
+      <div className="venue-dropdown-divider" />
+      <button className="venue-dropdown-item" onClick={onCreate}>
+        <span style={{ color: 'var(--brand)' }}>+ New venue</span>
+      </button>
     </div>
   );
 }

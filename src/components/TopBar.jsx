@@ -16,34 +16,49 @@ export default function TopBar() {
   return (
     <>
       <div className="topbar">
+        {/* Brand + venue */}
         <div className="brand">
           <span className="mark">Hospo</span>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em' }}>Stack</span>
+          <span className="stack">Stack</span>
           <span className="dot" />
-          <VenueSwitcher />
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <ConnectionIndicator />
-          <span className={`mode-pill ${device.mode}`}>
-            <span className="pin" />
-            {device.mode === 'kitchen' ? 'Kitchen Display' : device.mode === 'floor' ? 'Floor · Tables' : 'Till POS'}
-            <span style={{ color: 'var(--text-3)', marginLeft: 4 }}>· {device.deviceName}</span>
+          <span className="venue-name">
+            <VenueSwitcher compact />
           </span>
         </div>
 
-        <div className="right">
+        {/* Mode pill — centre */}
+        <div className="topbar-center">
+          <ConnectionIndicator />
+          <span className={`mode-pill ${device.mode}`}>
+            <span className="pin" />
+            {device.mode === 'kitchen' ? 'Kitchen'
+              : device.mode === 'floor' ? 'Floor'
+              : 'Till'}
+            <span className="device-name">· {device.deviceName}</span>
+          </span>
+        </div>
+
+        {/* User / actions — right */}
+        <div className="topbar-right">
+          {/* Avatar always visible */}
           <div className="user-chip">
             <div className="avatar">{initials}</div>
-            <span>{device.user.name}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{device.user.name}</span>
           </div>
+          {/* Just avatar on mobile */}
+          <div className="avatar" style={{ display: 'none' /* shown below via CSS */ }}>{initials}</div>
+
           {isManager && (
-            <button className="btn-ghost" onClick={() => setShowHub(true)} title="Manager settings">
-              ⚙ Manage
+            <button
+              className="btn-ghost"
+              onClick={() => setShowHub(true)}
+              title="Manager settings"
+              style={{ padding: '8px' }}
+            >
+              ⚙
             </button>
           )}
-          <button className="btn-ghost" onClick={logout}>Lock</button>
-          <button className="btn-ghost" onClick={reset}>Setup</button>
+          <button className="btn-ghost" onClick={logout} style={{ padding: '8px' }} title="Lock">🔒</button>
         </div>
       </div>
 
