@@ -27,6 +27,7 @@ export default function TillMode() {
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [cart, setCart] = useState([]);
   const [showPay, setShowPay] = useState(false);
+  const [pausedPayments, setPausedPayments] = useState([]); // payments preserved while editing
   const [toast, setToast] = useState(null);
   const [venue, setVenue] = useState(null);
   const [tick, setTick] = useState(0);
@@ -38,6 +39,8 @@ export default function TillMode() {
     const t = setInterval(() => setTick(x => x + 1), 30000);
     return () => clearInterval(t);
   }, []);
+  // Clear paused payments when order changes
+  useEffect(() => { if (!activeOrderId) setPausedPayments([]); }, [activeOrderId]);
 
   const alertMins = venue?.kdsAlertMins ?? 20;
 
@@ -217,9 +220,23 @@ export default function TillMode() {
     <div className="cart-head">
       <div className="tbl">
         {activeOrder
-          ? activeOrder.tableId
-            ? <>Table <b>{activeOrder.tableNumber || activeOrder.tableId?.replace('t','')}</b></>
-            : <>Tab <b style={{ fontSize: 14, fontFamily: 'var(--font-mono)' }}>#{activeOrder.id.slice(-4).toUpperCase()}</b></>
+          ? <>
+              {activeOrder.tableId
+                ? <>Table <b>{activeOrder.tableNumber || activeOrder.tableId?.replace('t','')}</b></>
+                : <>Tab <b style={{ fontSize: 14, fontFamily: 'var(--font-mono)' }}>#{activeOrder.id.slice(-4).toUpperCase()}</b></>
+              }
+              {activeMins !== null && (
+                <span style={{
+                  marginLeft: 10, fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: activeMins >= alertMins ? 'var(--red)'
+                       : activeMins >= alertMins * 0.6 ? 'var(--amber)'
+                       : 'var(--text-3)',
+                  fontWeight: activeMins >= alertMins ? 700 : 400
+                }}>
+                  ⏱ {activeMins}m
+                </span>
+              )}
+            </>
           : <>{orderType === 'takeaway' ? 'New Takeaway' : 'Counter / Dine-in'}</>
         }
       </div>
@@ -247,17 +264,36 @@ export default function TillMode() {
     </div>
   );
 
+  // Active time display
+  const openedMs = activeOrder?.openedAt?.toMillis?.() || activeOrder?.sentAt?.toMillis?.();
+  const activeMins = openedMs ? Math.floor((Date.now() - openedMs) / 60000) : null;
+
   const footerContent = activeOrder ? (
-    <div className="cart-actions">
+    <div className="cart-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+      {pausedPayments.length > 0 && (
+        <button
+          className="btn btn-primary btn-block"
+          onClick={() => setShowPay(true)}
+          style={{
+            background: 'var(--green-deep)', color: 'var(--green)',
+            border: '1px solid rgba(74,222,128,0.3)', fontWeight: 700
+          }}
+        >
+          ▶ Resume Payment · ${(activeOrder.total || 0).toFixed(2)}
+          <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>
+            ({pausedPayments.reduce((s,p)=>s+p.amount,0).toFixed(2)} applied)
+          </span>
+        </button>
+      )}
       {cart.length > 0 ? (
-        <>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <button className="btn" onClick={() => setCart([])}>Clear new</button>
           <button className="btn btn-primary" onClick={handleSendToKitchen}>
             Send +{cart.length} to Kitchen
           </button>
-        </>
-      ) : (
-        <button className="btn btn-success btn-lg btn-block" onClick={() => setShowPay(true)} style={{ gridColumn: '1 / -1' }}>
+        </div>
+      ) : pausedPayments.length === 0 && (
+        <button className="btn btn-success btn-lg btn-block" onClick={() => setShowPay(true)}>
           Take Payment · ${(activeOrder.total || 0).toFixed(2)}
         </button>
       )}
@@ -312,8 +348,13 @@ export default function TillMode() {
       {showPay && activeOrder && (
         <PayScreen
           order={activeOrder}
+          initialPayments={pausedPayments}
           onCancel={() => setShowPay(false)}
           onVoid={() => { setShowPay(false); setShowVoidConfirm(true); }}
+          onEditOrder={(currentPayments) => {
+            setPausedPayments(currentPayments);
+            setShowPay(false);
+          }}
           onComplete={handlePaid}
         />
       )}
@@ -371,6 +412,18 @@ function OpenTabsPane({ tabs, tables, activeId, alertMins = 20, onSelect, onPay,
                   <span>{(o.items || []).length} items</span>
                   <span className="tab-total">${(o.total || 0).toFixed(2)}</span>
                 </div>
+                {/* Active time since opened */}
+                {(() => {
+                  const openMs = o.openedAt?.toMillis?.() || o.sentAt?.toMillis?.();
+                  if (!openMs) return null;
+                  const mins = Math.floor((Date.now() - openMs) / 60000);
+                  const color = mins >= alertMins ? 'var(--red)' : mins >= alertMins * 0.6 ? 'var(--amber)' : 'var(--text-3)';
+                  return (
+                    <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color, marginTop: 2 }}>
+                      🕐 open {mins}m
+                    </div>
+                  );
+                })()}
                 {waitMins !== null && (
                   <div className={`tab-wait ${isOverdue ? 'overdue' : isWarn ? 'warn' : ''}`}>
                     ⏱ {waitMins}m waiting
@@ -406,11 +459,15 @@ function statusLabel(o) {
 }
 
 // ── Payment screen ───────────────────────────────────────────────────────
-function PayScreen({ order, onCancel, onVoid, onComplete }) {
+function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder, onComplete }) {
   const total = order.total || 0;
-  const [payments, setPayments] = useState(order.payments || []);
+  const [payments, setPayments] = useState(initialPayments.length ? initialPayments : (order.payments || []));
   const [amount, setAmount] = useState('');
-  const [stage, setStage] = useState('payment'); // 'payment' | 'customer'
+  const [stage, setStage] = useState('payment'); // 'payment' | 'split' | 'customer'
+  const [splitMode, setSplitMode] = useState(null); // 'persons' | 'items'
+  const [splitPersons, setSplitPersons] = useState(2);
+  const [splitSeat, setSplitSeat] = useState(0); // which seat is paying now (items split)
+  const [seatAssignments, setSeatAssignments] = useState({}); // itemIdx -> seatNum
   const [customer, setCustomer] = useState({
     name: order.customer?.name || '',
     email: order.customer?.email || '',
@@ -433,10 +490,7 @@ function PayScreen({ order, onCancel, onVoid, onComplete }) {
   const numeric = parseFloat(amount) || balance;
 
   const handleMethod = (method) => {
-    if (method === 'voucher') {
-      setShowVoucher(true);
-      return;
-    }
+    if (method === 'voucher') { setShowVoucher(true); return; }
     const amt = method === 'cash' ? (parseFloat(amount) || balance) : balance;
     if (amt <= 0) return;
     const next = [...payments, { method, amount: +Math.min(amt, balance + 1000).toFixed(2), ts: Date.now() }];
@@ -451,37 +505,251 @@ function PayScreen({ order, onCancel, onVoid, onComplete }) {
 
   const handleComplete = () => {
     if (balance > 0.005) return;
-    // Move to receipt-delivery stage
     setStage('customer');
   };
 
-  const handleFinalise = () => {
-    onComplete(payments, customer);
-  };
+  const handleFinalise = () => onComplete(payments, customer);
+  const handleSkip = () => onComplete(payments, null);
 
-  const handleSkip = () => {
-    onComplete(payments, null);
-  };
+  // ── Split by persons ─────────────────────────────────────────────────
+  const perPersonAmount = +(total / splitPersons).toFixed(2);
 
+  // ── Split by items — compute seat totals ─────────────────────────────
+  const items = order.items || [];
+  const seatCount = splitPersons;
+  const seatTotals = Array.from({ length: seatCount }, (_, s) => {
+    return items
+      .filter((_, i) => (seatAssignments[i] ?? 0) === s)
+      .reduce((sum, it) => sum + it.price * it.qty, 0);
+  });
+  const assignItem = (itemIdx, seat) => setSeatAssignments(a => ({ ...a, [itemIdx]: seat }));
+
+  // ── Customer stage ───────────────────────────────────────────────────
   if (stage === 'customer') {
     return <CustomerCaptureScreen
-      total={total}
-      change={change}
-      payments={payments}
-      customer={customer}
-      onChange={setCustomer}
+      total={total} change={change} payments={payments}
+      customer={customer} onChange={setCustomer}
       onBack={() => setStage('payment')}
-      onSend={handleFinalise}
-      onSkip={handleSkip}
+      onSend={handleFinalise} onSkip={handleSkip}
     />;
   }
 
+  // ── Split mode ───────────────────────────────────────────────────────
+  if (stage === 'split') {
+    return (
+      <div className="pay-screen">
+        <div className="pay-card">
+          <div className="pay-head">
+            <h2>Split payment</h2>
+            <div className="total">${total.toFixed(2)}</div>
+          </div>
+          <div className="pay-body" style={{ gridTemplateColumns: '1fr', gap: 0 }}>
+            {/* Split mode picker */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button
+                className={`btn ${splitMode === 'persons' ? 'btn-primary' : ''}`}
+                style={{ flex: 1 }}
+                onClick={() => setSplitMode('persons')}
+              >👥 By persons</button>
+              <button
+                className={`btn ${splitMode === 'items' ? 'btn-primary' : ''}`}
+                style={{ flex: 1 }}
+                onClick={() => setSplitMode('items')}
+              >🍽 By items</button>
+            </div>
+
+            {/* Person count stepper */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <span style={{ color: 'var(--text-2)', fontSize: 14 }}>Splitting between</span>
+              <div className="cart-edit-stepper" style={{ flex: 1, maxWidth: 140 }}>
+                <button className="cart-edit-step dec" onClick={() => setSplitPersons(p => Math.max(2, p - 1))}>−</button>
+                <span className="cart-edit-qty">{splitPersons}</span>
+                <button className="cart-edit-step inc" onClick={() => setSplitPersons(p => Math.min(12, p + 1))}>+</button>
+              </div>
+              <span style={{ color: 'var(--text-2)', fontSize: 14 }}>people</span>
+            </div>
+
+            {splitMode === 'persons' && (
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>
+                  Each person pays <b style={{ fontFamily: 'var(--font-mono)', color: 'var(--brand)', fontSize: 16 }}>${perPersonAmount.toFixed(2)}</b>
+                  {total % splitPersons !== 0 && <span style={{ color: 'var(--text-3)', marginLeft: 6 }}>(rounded)</span>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Array.from({ length: splitPersons }, (_, s) => {
+                    const alreadyPaid = payments
+                      .filter(p => p.seat === s)
+                      .reduce((sum, p) => sum + p.amount, 0);
+                    const isPaid = alreadyPaid >= perPersonAmount - 0.01;
+                    return (
+                      <div key={s} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 14px',
+                        background: isPaid ? 'var(--green-deep)' : 'var(--surface-2)',
+                        border: `1px solid ${isPaid ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                        borderRadius: 'var(--radius)'
+                      }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: isPaid ? 'var(--green)' : 'var(--text)', fontWeight: 600, fontSize: 15 }}>
+                          Person {s + 1}
+                        </span>
+                        <span style={{ flex: 1, fontFamily: 'var(--font-mono)', color: 'var(--brand)' }}>
+                          ${perPersonAmount.toFixed(2)}
+                        </span>
+                        {isPaid
+                          ? <span style={{ color: 'var(--green)', fontWeight: 600 }}>✓ Paid</span>
+                          : (
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              {['cash','card','eftpos'].map(m => (
+                                <button key={m} className="btn btn-sm" style={{ padding: '8px 10px', fontSize: 12 }}
+                                  onClick={() => {
+                                    setPayments([...payments, { method: m, amount: perPersonAmount, seat: s, ts: Date.now() }]);
+                                  }}
+                                >{m}</button>
+                              ))}
+                            </div>
+                          )
+                        }
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {splitMode === 'items' && (
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 10 }}>
+                  Assign each item to a person, then collect payment per person.
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  {Array.from({ length: seatCount }, (_, s) => (
+                    <button key={s}
+                      className={`cat-chip ${splitSeat === s ? 'active' : ''}`}
+                      onClick={() => setSplitSeat(s)}
+                    >
+                      Person {s + 1} · ${seatTotals[s].toFixed(2)}
+                    </button>
+                  ))}
+                </div>
+                <div className="data-table">
+                  {items.map((it, i) => {
+                    const seat = seatAssignments[i] ?? 0;
+                    return (
+                      <div key={i} className="row" style={{ gridTemplateColumns: '1fr auto auto', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: 14 }}>{it.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                            ×{it.qty} · ${(it.price * it.qty).toFixed(2)}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {Array.from({ length: seatCount }, (_, s) => (
+                            <button key={s}
+                              onClick={() => assignItem(i, s)}
+                              style={{
+                                width: 28, height: 28, borderRadius: '50%',
+                                border: `2px solid ${seat === s ? 'var(--brand)' : 'var(--border)'}`,
+                                background: seat === s ? 'var(--brand)' : 'var(--surface-2)',
+                                color: seat === s ? '#18120e' : 'var(--text-3)',
+                                fontSize: 11, fontWeight: 700
+                              }}
+                            >{s + 1}</button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Collect per seat */}
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Array.from({ length: seatCount }, (_, s) => {
+                    const seatTotal = seatTotals[s];
+                    const paidForSeat = payments.filter(p => p.seat === s).reduce((sum, p) => sum + p.amount, 0);
+                    const isPaid = paidForSeat >= seatTotal - 0.01;
+                    return (
+                      <div key={s} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                        background: isPaid ? 'var(--green-deep)' : 'var(--surface-2)',
+                        border: `1px solid ${isPaid ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                        borderRadius: 'var(--radius)'
+                      }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, flex: 1 }}>
+                          Person {s + 1} · ${seatTotal.toFixed(2)}
+                        </span>
+                        {isPaid
+                          ? <span style={{ color: 'var(--green)', fontWeight: 600 }}>✓ Paid</span>
+                          : (
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              {['cash','card','eftpos'].map(m => (
+                                <button key={m} className="btn btn-sm" style={{ padding: '8px 10px', fontSize: 12 }}
+                                  onClick={() => setPayments([...payments, { method: m, amount: +seatTotal.toFixed(2), seat: s, ts: Date.now() }])}
+                                >{m}</button>
+                              ))}
+                            </div>
+                          )
+                        }
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {!splitMode && (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>
+                Choose a split method above.
+              </div>
+            )}
+          </div>
+
+          <div className="pay-foot">
+            <div className="payments-list">
+              {payments.length === 0 && <span style={{ color: 'var(--text-3)', fontSize: 12 }}>No payments yet</span>}
+              {payments.map((p, i) => (
+                <span key={i} className="payment-chip">
+                  {p.seat !== undefined ? `P${p.seat+1} ` : ''}{p.method === 'voucher' && p.code ? `🎟 ${p.code}` : p.method} ${p.amount.toFixed(2)}
+                </span>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-ghost" onClick={() => setStage('payment')}>← Back</button>
+              <button
+                className="btn btn-success"
+                disabled={balance > 0.005}
+                style={{ opacity: balance > 0.005 ? 0.4 : 1 }}
+                onClick={handleComplete}
+              >Finalise</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Standard payment screen ──────────────────────────────────────────
   return (
     <div className="pay-screen">
       <div className="pay-card">
         <div className="pay-head">
-          <h2>Payment</h2>
-          <div className="total">${total.toFixed(2)}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h2>Payment</h2>
+            {onEditOrder && (
+              <button
+                onClick={() => onEditOrder(payments)}
+                style={{ fontSize: 12, color: 'var(--blue)', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', padding: 0 }}
+              >
+                ✎ Edit order
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <div className="total">${total.toFixed(2)}</div>
+            <button
+              className="btn btn-sm"
+              onClick={() => setStage('split')}
+              style={{ fontSize: 11, padding: '5px 10px' }}
+            >⇌ Split</button>
+          </div>
         </div>
         <div className="pay-body">
           <div>
