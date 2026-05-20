@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDevice } from '../context/DeviceContext';
-import { watchVenues, deleteEntireMenu } from '../lib/data';
+import { watchVenues, watchMenuItems, deleteEntireMenu } from '../lib/data';
 import MenuImporter from '../components/MenuImporter';
 import VenueSetupPanel from '../components/VenueSetupPanel';
 import GroupAdminPanel from '../components/GroupAdminPanel';
@@ -91,6 +91,14 @@ function OverviewSection({ device, venues, onJumpTo }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteToast, setDeleteToast] = useState(null);
+  const [menuItems, setMenuItems] = useState(null); // null = loading
+
+  // Watch menu item count so danger zone hides when menu is empty
+  useEffect(() => {
+    return watchMenuItems(setMenuItems);
+  }, []);
+
+  const hasMenu = menuItems !== null && menuItems.length > 0;
 
   const handleDeleteMenu = async () => {
     setDeleting(true);
@@ -153,25 +161,34 @@ function OverviewSection({ device, venues, onJumpTo }) {
         ))}
       </div>
 
-      {/* ── Danger Zone ─────────────────────────────────────────── */}
-      <div className="danger-zone">
-        <div className="danger-zone-head">
-          <h4>⚠ Danger zone</h4>
-          <p>These actions cannot be undone. Proceed with caution.</p>
-        </div>
-        {deleteToast && (
-          <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 13, marginBottom: 10 }}>
-            {deleteToast}
+      {/* ── Danger Zone — only shown when menu has items ──────────── */}
+      {hasMenu && (
+        <div className="danger-zone">
+          <div className="danger-zone-head">
+            <h4>⚠ Danger zone</h4>
+            <p>These actions cannot be undone. Proceed with caution.</p>
           </div>
-        )}
-        <button
-          className="btn btn-danger"
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={deleting}
-        >
-          🗑 Delete entire menu for {device.venueName}
-        </button>
-      </div>
+          {deleteToast && (
+            <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 13, marginBottom: 10 }}>
+              {deleteToast}
+            </div>
+          )}
+          <button
+            className="btn btn-danger"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={deleting}
+          >
+            🗑 Delete entire menu for {device.venueName}
+          </button>
+        </div>
+      )}
+
+      {/* Toast shown after delete even when danger zone is hidden */}
+      {!hasMenu && deleteToast && (
+        <div style={{ marginTop: 24, padding: '12px 14px', background: 'var(--green-deep)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, fontSize: 13, color: 'var(--green)' }}>
+          ✓ {deleteToast}
+        </div>
+      )}
 
       {/* Delete confirm modal */}
       {showDeleteConfirm && (
