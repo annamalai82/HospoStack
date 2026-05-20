@@ -415,7 +415,6 @@ function ReviewStep({ items, existingCats, createCategories, setCreateCategories
               >
                 <option value="kitchen">kitchen</option>
                 <option value="bar">bar</option>
-                <option value="expo">expo</option>
               </select>
               <button
                 className="icon-btn danger"
@@ -472,7 +471,7 @@ function parseExcel(arrayBuffer) {
         name: String(name).trim(),
         category: String(category).trim(),
         price: isNaN(price) ? 0 : price,
-        station: ['kitchen', 'bar', 'expo'].includes(station) ? station : 'kitchen',
+        station: ['kitchen', 'bar'].includes(station) ? station : 'kitchen',
         description: String(description).trim(),
         _include: true
       };
@@ -524,7 +523,7 @@ async function parseImageWithAI({ data, mediaType }) {
 - name (the dish name)
 - category (the section/header it's under, e.g. "Starters", "Mains", "Desserts")
 - price (in dollars, just the number)
-- station (one of: kitchen, bar, expo — default kitchen unless it's clearly a drink which is bar)
+- station (one of: kitchen, bar — default kitchen unless it is clearly a drink which is bar)
 - description (any descriptive text, or empty string)
 
 Return ONLY a JSON array, no markdown, no explanation. Format:
@@ -549,7 +548,7 @@ async function parseWithAI(text) {
 - name
 - category (the section header, e.g. "Starters", "Mains", "Drinks")
 - price (number only, in dollars)
-- station (one of: kitchen, bar, expo — default kitchen; bar for drinks)
+- station (one of: kitchen, bar — default kitchen; bar for drinks)
 - description (any text describing the item, or empty string)
 
 Return ONLY a JSON array, no markdown, no explanation. Format:
@@ -624,7 +623,7 @@ function extractItemsFromAIResponse(text) {
       name: String(it.name || '').trim(),
       category: String(it.category || 'Other').trim(),
       price: parseFloat(it.price) || 0,
-      station: ['kitchen', 'bar', 'expo'].includes(it.station) ? it.station : 'kitchen',
+      station: ['kitchen', 'bar'].includes(it.station) ? it.station : 'kitchen',
       description: String(it.description || '').trim(),
       _include: true
     })).filter(it => it.name);

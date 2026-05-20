@@ -22,6 +22,8 @@ import OrderPane from '../components/OrderPane';
 export default function TillMode() {
   const { device } = useDevice();
   const [orderType, setOrderType] = useState('takeaway');
+  const [pendingTableId, setPendingTableId] = useState(''); // chosen for new dine-in
+  const [pendingCustomerName, setPendingCustomerName] = useState(''); // chosen for new takeaway
   const [tables, setTables] = useState([]);
   const [orders, setOrders] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(null);
@@ -58,7 +60,15 @@ export default function TillMode() {
     [orders]
   );
 
-  const activeOrder = activeOrderId ? orders.find(o => o.id === activeOrderId) : null;
+  const activeOrderFromList = activeOrderId ? orders.find(o => o.id === activeOrderId) : null;
+  const [optimisticOrder, setOptimisticOrder] = useState(null);
+  // Once Firestore catches up and the order is in the list, drop the optimistic copy
+  useEffect(() => {
+    if (optimisticOrder && orders.find(o => o.id === optimisticOrder.id)) {
+      setOptimisticOrder(null);
+    }
+  }, [orders, optimisticOrder]);
+  const activeOrder = activeOrderFromList || (optimisticOrder?.id === activeOrderId ? optimisticOrder : null);
 
   // ── Cart ops ─────────────────────────────────────────────────────────
   const addToCart = (item) => {
@@ -105,27 +115,101 @@ export default function TillMode() {
   const handleSendToKitchen = async () => {
     if (cart.length === 0) return;
 
-    // If a tab is active, append to it. Otherwise create a new tab.
+    // Validate dine-in needs a table; takeaway should have a name
+    if (!activeOrder && orderType === 'dine-in-pickup' && !pendingTableId) {
+      return showToast('Pick a table first', 'error');
+    }
+
     const sentCart = cart.map(l => ({ ...l, status: 'sent' }));
 
     if (activeOrder) {
+      // Appending to existing order — preserve table/customer info
       const items = [...(activeOrder.items || []), ...sentCart];
       const totals = calcTotals(items);
       await sendOrderToKitchen(activeOrder.id, items, totals);
       showToast(`+${cart.length} item${cart.length === 1 ? '' : 's'} sent to kitchen`);
     } else {
+      // New order — attach table info or customer name
       const totals = calcTotals(sentCart);
+      const isDineIn = orderType === 'dine-in-pickup';
+      const tbl = isDineIn ? tables.find(t => t.id === pendingTableId) : null;
+      const newOrder = {
+        tableId: tbl?.id || null,
+        tableNumber: tbl?.number || null,
+        customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
+        orderType,
+        openedBy: device.user.id,
+        items: []
+      };
+      const orderId = await createOrder(newOrder);
+      await sendOrderToKitchen(orderId, sentCart, totals);
+      // Mark table as ordering
+      if (tbl) await updateTableStatus(tbl.id, 'ordering');
+      // Optimistic local copy so the UI doesn't blank while Firestore catches up
+      setOptimisticOrder({
+        id: orderId,
+        ...newOrder,
+        items: sentCart,
+        ...totals,
+        status: 'sent',
+        openedAt: { toMillis: () => Date.now() },
+        sentAt: { toMillis: () => Date.now() }
+      });
+      setActiveOrderId(orderId);
+      setPendingTableId('');
+      setPendingCustomerName('');
+      const label = tbl ? `Table ${tbl.number}` : (pendingCustomerName.trim() || 'Takeaway');
+      showToast(`${label} sent to kitchen`);
+    }
+    setCart([]);
+  };
+
+  // ── Send + immediately go to payment (counter / quick service flow) ──
+  const handleSendAndPay = async () => {
+    if (cart.length === 0) return;
+    if (!activeOrder && orderType === 'dine-in-pickup' && !pendingTableId) {
+      return showToast('Pick a table first', 'error');
+    }
+    const sentCart = cart.map(l => ({ ...l, status: 'sent' }));
+    const totals = calcTotals(sentCart);
+
+    if (activeOrder) {
+      const items = [...(activeOrder.items || []), ...sentCart];
+      const newTotals = calcTotals(items);
+      await sendOrderToKitchen(activeOrder.id, items, newTotals);
+      setCart([]);
+      setShowPay(true);
+    } else {
+      const isDineIn = orderType === 'dine-in-pickup';
+      const tbl = isDineIn ? tables.find(t => t.id === pendingTableId) : null;
       const orderId = await createOrder({
-        tableId: null,
+        tableId: tbl?.id || null,
+        tableNumber: tbl?.number || null,
+        customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
         orderType,
         openedBy: device.user.id,
         items: []
       });
       await sendOrderToKitchen(orderId, sentCart, totals);
+      if (tbl) await updateTableStatus(tbl.id, 'ordering');
+      setOptimisticOrder({
+        id: orderId,
+        tableId: tbl?.id || null,
+        tableNumber: tbl?.number || null,
+        customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
+        orderType,
+        items: sentCart,
+        ...totals,
+        status: 'sent',
+        openedAt: { toMillis: () => Date.now() },
+        sentAt: { toMillis: () => Date.now() }
+      });
       setActiveOrderId(orderId);
-      showToast(`Sent to kitchen · order opened`);
+      setCart([]);
+      setPendingTableId('');
+      setPendingCustomerName('');
+      setShowPay(true);
     }
-    setCart([]);
   };
 
   // ── Take Payment (step 2) ───────────────────────────────────────────
@@ -216,57 +300,105 @@ export default function TillMode() {
   };
   // ── Render ────────────────────────────────────────────────────────────
   const sentItems = activeOrder?.items || [];
-  const headerContent = (
-    <div className="cart-head">
-      <div className="tbl">
-        {activeOrder
-          ? <>
-              {activeOrder.tableId
-                ? <>Table <b>{activeOrder.tableNumber || activeOrder.tableId?.replace('t','')}</b></>
-                : <>Tab <b style={{ fontSize: 14, fontFamily: 'var(--font-mono)' }}>#{activeOrder.id.slice(-4).toUpperCase()}</b></>
-              }
-              {activeMins !== null && (
-                <span style={{
-                  marginLeft: 10, fontSize: 11, fontFamily: 'var(--font-mono)',
-                  color: activeMins >= alertMins ? 'var(--red)'
-                       : activeMins >= alertMins * 0.6 ? 'var(--amber)'
-                       : 'var(--text-3)',
-                  fontWeight: activeMins >= alertMins ? 700 : 400
-                }}>
-                  ⏱ {activeMins}m
-                </span>
-              )}
-            </>
-          : <>{orderType === 'takeaway' ? 'New Takeaway' : 'Counter / Dine-in'}</>
-        }
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {activeOrder && (
-          <button
-            className="btn btn-danger btn-sm"
-            onClick={() => setShowVoidConfirm(true)}
-            title="Void this order"
-          >🚫 Void</button>
-        )}
-        {!activeOrder ? (
-          <select
-            value={orderType}
-            onChange={e => setOrderType(e.target.value)}
-            style={{ padding: '6px 10px', fontSize: 12 }}
-          >
-            <option value="takeaway">Takeaway</option>
-            <option value="dine-in-pickup">Counter / Dine-in</option>
-          </select>
-        ) : (
-          <button className="btn-ghost" onClick={cancelActive}>← Back</button>
-        )}
-      </div>
-    </div>
-  );
 
-  // Active time display
+  // Active time display (must be defined BEFORE headerContent uses it)
   const openedMs = activeOrder?.openedAt?.toMillis?.() || activeOrder?.sentAt?.toMillis?.();
   const activeMins = openedMs ? Math.floor((Date.now() - openedMs) / 60000) : null;
+
+  // Tables available for a new dine-in
+  const freeTables = tables.filter(t => t.status === 'free' || t.id === pendingTableId);
+
+  const headerContent = (
+    <div className="cart-head" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10, padding: '12px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div className="tbl" style={{ fontSize: 18 }}>
+          {activeOrder
+            ? activeOrder.tableId
+              ? <>Table <b>{activeOrder.tableNumber || activeOrder.tableId?.replace('t','')}</b></>
+              : activeOrder.customerName
+                ? <>🥡 <b style={{ color: 'var(--brand)', fontStyle: 'normal', fontFamily: 'var(--font-display)' }}>{activeOrder.customerName}</b></>
+                : <>Takeaway <b style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}>#{activeOrder.id.slice(-4).toUpperCase()}</b></>
+            : <>{orderType === 'takeaway' ? 'New Takeaway' : 'New Dine-in'}</>
+          }
+          {activeOrder && activeMins !== null && (
+            <span style={{
+              marginLeft: 10, fontSize: 11, fontFamily: 'var(--font-mono)',
+              color: activeMins >= alertMins ? 'var(--red)'
+                   : activeMins >= alertMins * 0.6 ? 'var(--amber)'
+                   : 'var(--text-3)'
+            }}>⏱ {activeMins}m</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {activeOrder && (
+            <button className="btn btn-danger btn-sm" onClick={() => setShowVoidConfirm(true)}>🚫 Void</button>
+          )}
+          {activeOrder && (
+            <button className="btn-ghost" onClick={cancelActive}>← Back</button>
+          )}
+        </div>
+      </div>
+
+      {/* When starting a NEW order: pick type, then table or customer name */}
+      {!activeOrder && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <button
+              className={orderType === 'takeaway' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}
+              onClick={() => { setOrderType('takeaway'); setPendingTableId(''); }}
+            >🥡 Takeaway</button>
+            <button
+              className={orderType === 'dine-in-pickup' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}
+              onClick={() => { setOrderType('dine-in-pickup'); setPendingCustomerName(''); }}
+            >🍽 Dine-in</button>
+          </div>
+
+          {orderType === 'dine-in-pickup' && (
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                Pick a table <span style={{ color: 'var(--red)' }}>*</span>
+              </label>
+              {freeTables.length === 0 ? (
+                <div style={{
+                  background: 'var(--amber-deep)', border: '1px solid rgba(251,191,36,0.3)',
+                  borderRadius: 6, padding: 8, fontSize: 12, color: 'var(--amber)'
+                }}>
+                  All tables occupied — pick from Open Tabs or use Takeaway.
+                </div>
+              ) : (
+                <div className="table-quick-pick">
+                  {freeTables.map(t => (
+                    <button
+                      key={t.id}
+                      className={`table-quick-btn ${pendingTableId === t.id ? 'picked' : ''}`}
+                      onClick={() => setPendingTableId(t.id)}
+                    >
+                      <span className="num">{t.number}</span>
+                      <span className="zone">{t.zone}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {orderType === 'takeaway' && (
+            <div>
+              <label style={{ fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                Customer name <span style={{ color: 'var(--text-3)' }}>(recommended)</span>
+              </label>
+              <input
+                value={pendingCustomerName}
+                onChange={e => setPendingCustomerName(e.target.value)}
+                placeholder="e.g. Priya, John"
+                style={{ fontSize: 15, padding: '10px 12px' }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   const footerContent = activeOrder ? (
     <div className="cart-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
@@ -299,11 +431,27 @@ export default function TillMode() {
       )}
     </div>
   ) : (
-    <div className="cart-actions">
-      <button className="btn" onClick={() => setCart([])} disabled={!cart.length}>Clear</button>
-      <button className="btn btn-primary" onClick={handleSendToKitchen} disabled={!cart.length}>
-        Send to Kitchen
-      </button>
+    // New order (no active tab yet) — actions vary by order type
+    <div className="cart-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <button className="btn" onClick={() => setCart([])} disabled={!cart.length}>Clear</button>
+        <button
+          className="btn btn-primary"
+          onClick={handleSendToKitchen}
+          disabled={!cart.length}
+          style={{ opacity: cart.length ? 1 : 0.4 }}
+        >
+          Send to Kitchen
+        </button>
+      </div>
+      {cart.length > 0 && (
+        <button
+          className="btn btn-success btn-lg btn-block"
+          onClick={handleSendAndPay}
+        >
+          💳 Send + Pay Now · ${calcTotals(cart).total.toFixed(2)}
+        </button>
+      )}
     </div>
   );
 

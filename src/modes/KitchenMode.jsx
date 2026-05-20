@@ -7,8 +7,7 @@ import {
 const STATIONS = [
   { id: 'all', label: 'All' },
   { id: 'kitchen', label: 'Kitchen' },
-  { id: 'bar', label: 'Bar' },
-  { id: 'expo', label: 'Expo' }
+  { id: 'bar', label: 'Bar' }
 ];
 
 const DEFAULT_WARN_MINS  = 8;
@@ -167,32 +166,38 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
   };
 
   const orderNumber = (order.id || '').slice(-4).toUpperCase();
-  const tableLabel  = order.tableId
+  const isDineIn = !!order.tableId;
+  const primaryLabel = isDineIn
     ? `Table ${order.tableNumber || order.tableId.replace('t', '')}`
-    : (order.orderType || 'takeaway');
+    : (order.customerName || `Takeaway #${orderNumber}`);
+  const typeBadge = isDineIn ? 'DINE-IN' : 'TAKEAWAY';
 
   return (
-    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''}`}>
+    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'}`}>
       {/* ── Header — tap to collapse/expand ── */}
       <button className="kds-ticket-head" onClick={onToggleCollapse}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="num">#{orderNumber}</div>
-          {/* Progress pill */}
-          <div className={`kds-progress ${doneCount === totalCount ? 'done' : ''}`}>
-            {doneCount}/{totalCount}
+        <div className="kds-ticket-head-left">
+          <div className={`kds-type-badge ${isDineIn ? 'dinein' : 'takeaway'}`}>
+            {isDineIn ? '🍽' : '🥡'} {typeBadge}
           </div>
-          {extensions > 0 && (
-            <div className="kds-extensions" title={`Wait extended ${extensions} time${extensions === 1 ? '' : 's'}`}>
-              +{extensions}⏱
-            </div>
-          )}
+          <div className="kds-primary-label">{primaryLabel}</div>
+          <div className="kds-secondary">
+            <span className="kds-order-num">#{orderNumber}</span>
+            <span className={`kds-progress ${doneCount === totalCount ? 'done' : ''}`}>
+              {doneCount}/{totalCount}
+            </span>
+            {extensions > 0 && (
+              <span className="kds-extensions" title={`Wait extended ${extensions} time${extensions === 1 ? '' : 's'}`}>
+                +{extensions}⏱
+              </span>
+            )}
+          </div>
         </div>
-        <div className="meta">
-          <b className={isOverdue ? 'time-overdue' : isWarning ? 'time-warn' : ''}>
+        <div className="kds-ticket-head-right">
+          <b className={`kds-time ${isOverdue ? 'time-overdue' : isWarning ? 'time-warn' : ''}`}>
             {ageMin}:{ss}
           </b>
-          <span>{tableLabel}</span>
-          <span className="collapse-icon">{collapsed ? '▸' : '▾'}</span>
+          <span className="collapse-icon">{collapsed ? '▸ tap to expand' : '▾'}</span>
         </div>
       </button>
 

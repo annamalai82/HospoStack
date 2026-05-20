@@ -6,7 +6,7 @@ import {
 } from '../lib/data';
 import Modal from './Modal';
 
-const STATIONS = ['kitchen', 'bar', 'expo'];
+const STATIONS = ['kitchen', 'bar'];
 const COURSES = ['starter', 'main', 'dessert', 'drink', 'side'];
 const SWATCHES = ['#f59e0b','#ef4444','#8b5cf6','#10b981','#ec4899','#3b82f6','#06b6d4','#f97316','#84cc16','#a855f7'];
 
