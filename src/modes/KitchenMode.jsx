@@ -3,6 +3,7 @@ import {
   watchKitchenOrders, bumpOrderItem, updateOrder,
   extendOrderWait, watchVenue, updateVenue
 } from '../lib/data';
+import { useDevice } from '../context/DeviceContext';
 
 const STATIONS = [
   { id: 'all', label: 'All' },
@@ -15,15 +16,24 @@ const DEFAULT_ALERT_MINS = 20; // configurable
 const EXTEND_MINS = 5;         // each extension adds 5 minutes
 
 export default function KitchenMode() {
+  const { device } = useDevice();
   const [orders, setOrders] = useState([]);
   const [station, setStation] = useState('all');
   const [tick, setTick] = useState(0);
   const [venue, setVenue] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [collapsed, setCollapsed] = useState({}); // orderId → bool
+  const [collapsed, setCollapsed] = useState({});
 
-  useEffect(() => watchKitchenOrders(setOrders), []);
-  useEffect(() => watchVenue(setVenue), []);
+  // Re-subscribe whenever venueId changes (ensures we're watching the right venue)
+  const venueId = device?.venueId;
+  useEffect(() => {
+    if (!venueId) return;
+    return watchKitchenOrders(setOrders);
+  }, [venueId]);
+  useEffect(() => {
+    if (!venueId) return;
+    return watchVenue(setVenue);
+  }, [venueId]);
 
   // Re-render every 10s for live timing
   useEffect(() => {

@@ -34,9 +34,10 @@ export default function TillMode() {
   const [venue, setVenue] = useState(null);
   const [tick, setTick] = useState(0);
 
-  useEffect(() => watchTables(setTables), []);
-  useEffect(() => watchOpenOrders(setOrders), []);
-  useEffect(() => watchVenue(setVenue), []);
+  const venueId = device?.venueId;
+  useEffect(() => { if (!venueId) return; return watchTables(setTables); }, [venueId]);
+  useEffect(() => { if (!venueId) return; return watchOpenOrders(setOrders); }, [venueId]);
+  useEffect(() => { if (!venueId) return; return watchVenue(setVenue); }, [venueId]);
   useEffect(() => {
     const t = setInterval(() => setTick(x => x + 1), 30000);
     return () => clearInterval(t);

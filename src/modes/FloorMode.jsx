@@ -22,9 +22,10 @@ export default function FloorMode() {
   const [tick, setTick] = useState(0);
   const [showVoidConfirm, setShowVoidConfirm] = useState(false);
 
-  useEffect(() => watchTables(setTables), []);
-  useEffect(() => watchOpenOrders(setOrders), []);
-  useEffect(() => watchVenue(setVenue), []);
+  const venueId = device?.venueId;
+  useEffect(() => { if (!venueId) return; return watchTables(setTables); }, [venueId]);
+  useEffect(() => { if (!venueId) return; return watchOpenOrders(setOrders); }, [venueId]);
+  useEffect(() => { if (!venueId) return; return watchVenue(setVenue); }, [venueId]);
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
     return watchBookingsForDate(today, setBookings);

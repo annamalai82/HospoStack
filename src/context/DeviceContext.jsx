@@ -7,7 +7,12 @@ const KEY = 'hospostack.device';
 
 export function DeviceProvider({ children }) {
   const [device, setDevice] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; }
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY) || 'null');
+      // Sync venue to data layer immediately — before any children mount
+      if (d?.venueId) setVenueId(d.venueId);
+      return d;
+    } catch { return null; }
   });
 
   // Whenever the device's venue changes, sync the data layer's active venue
