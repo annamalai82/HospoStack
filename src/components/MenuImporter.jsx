@@ -10,11 +10,163 @@ import { useEffect } from 'react';
 const STEPS = ['source', 'preview', 'review', 'done'];
 
 const SOURCE_TYPES = [
+  { id: 'preset',      icon: '⚡', title: 'Sizzle N Sambar preset', blurb: 'Pre-loaded with the full SNS menu — 78 items across 14 categories. One-click import.' },
   { id: 'paste',       icon: '📝', title: 'Paste text',        blurb: 'Paste a plain-text menu. The AI parser will detect items and prices.' },
   { id: 'excel',       icon: '📊', title: 'Excel / CSV',        blurb: 'Upload .xlsx, .xls or .csv. Expects columns: name, category, price.' },
   { id: 'word',        icon: '📄', title: 'Word document',      blurb: 'Upload a .docx file. Converted to text then parsed by AI.' },
   { id: 'pdf-text',    icon: '📑', title: 'PDF (text-based)',   blurb: 'Upload a PDF with selectable text.' },
   { id: 'image',       icon: '📸', title: 'Photo / image',      blurb: 'Snap or upload a handwritten or printed menu photo. AI will read it.' }
+];
+
+// Full Sizzle N Sambar menu from East Victoria Park — transcribed from the printed menu
+const SNS_PRESET = [
+  // VEG STARTERS
+  { name: 'Gobi 65',                     category: 'Veg Starters',     price: 15.9, station: 'kitchen' },
+  { name: 'Mushroom 65',                 category: 'Veg Starters',     price: 18.9, station: 'kitchen' },
+  { name: 'Paneer Tikka (Sizzler)',      category: 'Veg Starters',     price: 18.9, station: 'kitchen' },
+  { name: 'Veg Balls Manchurian',        category: 'Veg Starters',     price: 19.9, station: 'kitchen' },
+  { name: 'Chilli Paneer',               category: 'Veg Starters',     price: 19.9, station: 'kitchen' },
+  { name: 'Medhu Vadai (2pcs)',          category: 'Veg Starters',     price: 10.9, station: 'kitchen' },
+  { name: 'Aloo Samosa (2pcs)',          category: 'Veg Starters',     price: 10.9, station: 'kitchen' },
+  // NON VEG STARTERS
+  { name: 'Prawn Milagu Varuval',        category: 'Non Veg Starters', price: 25.9, station: 'kitchen' },
+  { name: 'Meen Varuval (Barramundi)',   category: 'Non Veg Starters', price: 23.9, station: 'kitchen' },
+  { name: 'Mutton Chukka',               category: 'Non Veg Starters', price: 23.9, station: 'kitchen' },
+  { name: 'Beef Pepper Fry',             category: 'Non Veg Starters', price: 22.9, station: 'kitchen' },
+  { name: 'Chicken Maharani (on bone)',  category: 'Non Veg Starters', price: 22.9, station: 'kitchen' },
+  { name: 'Chicken 65',                  category: 'Non Veg Starters', price: 19.9, station: 'kitchen' },
+  { name: 'Chilli Chicken',              category: 'Non Veg Starters', price: 24.9, station: 'kitchen' },
+  { name: 'Chicken Lollypop',            category: 'Non Veg Starters', price: 19.9, station: 'kitchen' },
+  { name: 'Tandoori Chicken 4pcs',       category: 'Non Veg Starters', price: 19.9, station: 'kitchen' },
+  { name: 'Tandoori Chicken 8pcs',       category: 'Non Veg Starters', price: 29.9, station: 'kitchen' },
+  { name: 'Lamb Seekh Kebab (5pcs)',     category: 'Non Veg Starters', price: 21.9, station: 'kitchen' },
+  { name: 'Nandu Omlette',               category: 'Non Veg Starters', price: 18.9, station: 'kitchen' },
+  { name: 'Kalakki',                     category: 'Non Veg Starters', price: 13.9, station: 'kitchen' },
+  // SNS SPECIALS
+  { name: 'Kizhi Parotta — Chicken',     category: 'SNS Specials',     price: 25.9, station: 'kitchen', description: 'Flaky parotta filled with curry, sealed in banana leaf, slow-steamed' },
+  { name: 'Kizhi Parotta — Goat',        category: 'SNS Specials',     price: 27.9, station: 'kitchen', description: 'Flaky parotta filled with curry, sealed in banana leaf, slow-steamed' },
+  { name: 'Paal Parotta Mudpot — Chicken', category: 'SNS Specials',   price: 25.9, station: 'kitchen', description: 'Parotta soaked in coconut milk and South Indian spices' },
+  { name: 'Paal Parotta Mudpot — Goat',  category: 'SNS Specials',     price: 27.9, station: 'kitchen', description: 'Parotta soaked in coconut milk and South Indian spices' },
+  { name: 'Nalli Fry',                   category: 'SNS Specials',     price: 29.9, station: 'kitchen', description: 'Melt-in-the-mouth mutton shanks, best with malabar parotta or jeera rice' },
+  { name: 'Kari Dosa',                   category: 'SNS Specials',     price: 22.9, station: 'kitchen', description: 'Chicken curry with onions, tomatoes & South Indian masalas on a crisp dosa' },
+  { name: 'Kothu Parotta — Veg',         category: 'SNS Specials',     price: 19.9, station: 'kitchen' },
+  { name: 'Kothu Parotta — Egg',         category: 'SNS Specials',     price: 19.9, station: 'kitchen' },
+  { name: 'Kothu Parotta — Chicken',     category: 'SNS Specials',     price: 22.9, station: 'kitchen' },
+  { name: 'Kothu Parotta — Mutton',      category: 'SNS Specials',     price: 24.9, station: 'kitchen' },
+  { name: 'Neer Dosa with Chicken Ghee Roast', category: 'SNS Specials', price: 23.9, station: 'kitchen' },
+  { name: 'Neer Dosa with Sambar & Chutney',   category: 'SNS Specials', price: 19.9, station: 'kitchen' },
+  { name: 'Meen Polichathu',             category: 'SNS Specials',     price: 27.9, station: 'kitchen', description: 'Kerala dish — fish smeared in spices, wrapped in banana leaves and steamed' },
+  // IDLI
+  { name: 'Idli (3pcs)',                 category: 'Idli',             price: 13.9, station: 'kitchen' },
+  { name: 'Mini Podi Idli',              category: 'Idli',             price: 16.9, station: 'kitchen' },
+  { name: 'Mini Ghee Idli',              category: 'Idli',             price: 16.9, station: 'kitchen' },
+  // DOSAI
+  { name: 'Plain Dosai',                 category: 'Dosai',            price: 15.9, station: 'kitchen' },
+  { name: 'Ghee Dosai',                  category: 'Dosai',            price: 16.9, station: 'kitchen' },
+  { name: 'Masala Dosai',                category: 'Dosai',            price: 18.9, station: 'kitchen' },
+  { name: 'Ghee Podi Dosai',             category: 'Dosai',            price: 18.9, station: 'kitchen' },
+  { name: 'Ghee Podi Masala Dosai',      category: 'Dosai',            price: 20.9, station: 'kitchen' },
+  { name: 'Mysore Masala Dosai',         category: 'Dosai',            price: 21.9, station: 'kitchen' },
+  { name: 'Paneer Masala Dosai',         category: 'Dosai',            price: 22.9, station: 'kitchen' },
+  { name: 'Rava Dosai',                  category: 'Dosai',            price: 18.9, station: 'kitchen' },
+  { name: 'Onion Rava Dosai',            category: 'Dosai',            price: 19.9, station: 'kitchen' },
+  { name: 'Rava Masala Dosai',           category: 'Dosai',            price: 20.9, station: 'kitchen' },
+  { name: 'Rava Ghee Roast',             category: 'Dosai',            price: 20.9, station: 'kitchen' },
+  { name: 'Onion Uttappam',              category: 'Dosai',            price: 15.9, station: 'kitchen' },
+  { name: 'Vegetable Uttappam',          category: 'Dosai',            price: 17.9, station: 'kitchen' },
+  { name: 'Egg Dosai',                   category: 'Dosai',            price: 18.9, station: 'kitchen' },
+  // POORI & BATURA
+  { name: 'Poori 3pcs with Potato Masala', category: 'Poori & Batura', price: 17.9, station: 'kitchen' },
+  { name: 'Channa Batura',               category: 'Poori & Batura',   price: 21.9, station: 'kitchen' },
+  // BIRIYANI
+  { name: 'Kaikari / Veg Biriyani',      category: 'Biriyani',         price: 19.9, station: 'kitchen' },
+  { name: 'Mambas Biriyani — Chicken',   category: 'Biriyani',         price: 23.9, station: 'kitchen', description: 'SNS Special' },
+  { name: 'Mambas Biriyani — Goat',      category: 'Biriyani',         price: 25.9, station: 'kitchen', description: 'SNS Special' },
+  { name: 'Dum Biriyani — Chicken',      category: 'Biriyani',         price: 23.9, station: 'kitchen' },
+  { name: 'Dum Biriyani — Beef',         category: 'Biriyani',         price: 23.9, station: 'kitchen' },
+  { name: 'Dum Biriyani — Goat',         category: 'Biriyani',         price: 25.9, station: 'kitchen' },
+  { name: 'Dum Biriyani — Fish',         category: 'Biriyani',         price: 28.9, station: 'kitchen' },
+  { name: 'Dum Biriyani — Prawns',       category: 'Biriyani',         price: 28.9, station: 'kitchen' },
+  // RICE
+  { name: 'Plain Rice',                  category: 'Rice',             price: 5.9,  station: 'kitchen' },
+  { name: 'Jeera Rice',                  category: 'Rice',             price: 5.9,  station: 'kitchen' },
+  { name: 'Matar Pulao',                 category: 'Rice',             price: 9.9,  station: 'kitchen' },
+  // INDIAN BREADS
+  { name: 'Malabar Parotta',             category: 'Breads',           price: 4.9,  station: 'kitchen' },
+  { name: 'Naan — Plain',                category: 'Breads',           price: 5.9,  station: 'kitchen' },
+  { name: 'Naan — Butter',               category: 'Breads',           price: 6.9,  station: 'kitchen' },
+  { name: 'Naan — Garlic',               category: 'Breads',           price: 5.9,  station: 'kitchen' },
+  { name: 'Naan — Chilli',               category: 'Breads',           price: 6.9,  station: 'kitchen' },
+  { name: 'Naan — Cheese',               category: 'Breads',           price: 7.5,  station: 'kitchen' },
+  { name: 'Tandoori Roti — Plain',       category: 'Breads',           price: 4.9,  station: 'kitchen' },
+  { name: 'Tandoori Roti — Butter',      category: 'Breads',           price: 5.9,  station: 'kitchen' },
+  // VEG CURRIES
+  { name: 'Aloo Gobi',                   category: 'Veg Curries',      price: 18.9, station: 'kitchen' },
+  { name: 'Daal Tadka',                  category: 'Veg Curries',      price: 18.9, station: 'kitchen' },
+  { name: 'Channa Masala',               category: 'Veg Curries',      price: 18.9, station: 'kitchen' },
+  { name: 'Shahi Mushroom Matar',        category: 'Veg Curries',      price: 20.9, station: 'kitchen' },
+  { name: 'Veg Jalfrezi',                category: 'Veg Curries',      price: 20.9, station: 'kitchen' },
+  { name: 'Pachai Kari Kurma',           category: 'Veg Curries',      price: 20.9, station: 'kitchen' },
+  { name: 'Kathrikai Curry (Eggplant Masala)', category: 'Veg Curries', price: 21.9, station: 'kitchen' },
+  { name: 'Paneer Butter Masala',        category: 'Veg Curries',      price: 22.9, station: 'kitchen' },
+  { name: 'Palak Paneer',                category: 'Veg Curries',      price: 24.9, station: 'kitchen' },
+  // CHICKEN CURRIES
+  { name: 'Butter Chicken',              category: 'Chicken Curries',  price: 24.9, station: 'kitchen' },
+  { name: 'Chettinad Chicken',           category: 'Chicken Curries',  price: 24.9, station: 'kitchen', description: 'SNS Special' },
+  { name: 'Chicken Vanutha Curry',       category: 'Chicken Curries',  price: 24.9, station: 'kitchen', description: 'SNS Special' },
+  { name: 'Chicken Chettan',             category: 'Chicken Curries',  price: 24.9, station: 'kitchen' },
+  { name: 'Spicy Andhra Chicken Curry',  category: 'Chicken Curries',  price: 24.9, station: 'kitchen' },
+  { name: 'Chicken Tikka Masala',        category: 'Chicken Curries',  price: 24.9, station: 'kitchen' },
+  { name: 'Chicken Jalfrezi',            category: 'Chicken Curries',  price: 24.9, station: 'kitchen' },
+  // MUTTON / LAMB / BEEF
+  { name: 'Mutton Chukka',               category: 'Mutton Curries',   price: 28.9, station: 'kitchen', description: 'SNS Special' },
+  { name: 'Mutton Vanutha Curry',        category: 'Mutton Curries',   price: 28.9, station: 'kitchen' },
+  { name: 'Mutton Paya',                 category: 'Mutton Curries',   price: 22.9, station: 'kitchen' },
+  { name: 'Lamb Rogan Josh',             category: 'Lamb Curries',     price: 28.9, station: 'kitchen' },
+  { name: 'Lamb Korma',                  category: 'Lamb Curries',     price: 28.9, station: 'kitchen' },
+  { name: 'Beef Masala',                 category: 'Beef Curries',     price: 27.9, station: 'kitchen' },
+  { name: 'Beef Vindaloo',               category: 'Beef Curries',     price: 27.9, station: 'kitchen' },
+  // FISH & PRAWNS
+  { name: 'Gramathu Meen Kozhambu',      category: 'Fish & Prawns',    price: 28.9, station: 'kitchen' },
+  { name: 'Varutharacha Chemeen Curry',  category: 'Fish & Prawns',    price: 28.9, station: 'kitchen' },
+  // EGG
+  { name: 'Egg Roast (2pcs)',            category: 'Egg',              price: 19.9, station: 'kitchen' },
+  // IDIAPPAM / STRING HOPPER
+  { name: 'Idiappam 4pcs',               category: 'Idiappam',         price: 11.9, station: 'kitchen' },
+  { name: 'Paya with Idiappam — SNS Special', category: 'Idiappam',    price: 29.9, station: 'kitchen' },
+  // FRIED RICE / NOODLES
+  { name: 'Veg Fried Rice / Schezwan Fried Rice',     category: 'Fried Rice & Noodles', price: 18.9, station: 'kitchen' },
+  { name: 'Egg Fried Rice / Schezwan Fried Rice',     category: 'Fried Rice & Noodles', price: 20.9, station: 'kitchen' },
+  { name: 'Chicken Fried Rice / Schezwan Fried Rice', category: 'Fried Rice & Noodles', price: 22.9, station: 'kitchen' },
+  { name: 'Prawn Fried Rice / Schezwan Fried Rice',   category: 'Fried Rice & Noodles', price: 24.9, station: 'kitchen' },
+  { name: 'Hakka Noodles / Schezwan Noodles — Veg',     category: 'Fried Rice & Noodles', price: 18.9, station: 'kitchen' },
+  { name: 'Hakka Noodles / Schezwan Noodles — Chicken', category: 'Fried Rice & Noodles', price: 22.9, station: 'kitchen' },
+  // SAAPADU
+  { name: 'Saapadu — Veg',               category: 'Saapadu (Limited)', price: 21.9, station: 'kitchen', description: 'Fri/Sat/Sun only' },
+  { name: 'Saapadu — Chicken',           category: 'Saapadu (Limited)', price: 25.9, station: 'kitchen', description: 'Fri/Sat/Sun only' },
+  { name: 'Saapadu — Mutton',            category: 'Saapadu (Limited)', price: 27.9, station: 'kitchen', description: 'Fri/Sat/Sun only' },
+  { name: 'Saapadu — Fish',              category: 'Saapadu (Limited)', price: 30.9, station: 'kitchen', description: 'Fri/Sat/Sun only' },
+  // DESSERTS
+  { name: 'Rasmalai 2pcs',               category: 'Desserts',         price: 7.9,  station: 'kitchen' },
+  { name: 'Gulab Jamun 3pcs',            category: 'Desserts',         price: 7.9,  station: 'kitchen' },
+  { name: 'Pistachio Kulfi',             category: 'Desserts',         price: 7.9,  station: 'kitchen' },
+  // BEVERAGES
+  { name: 'Badam Milk (Hot or Cold)',    category: 'Beverages',        price: 6.9,  station: 'bar' },
+  { name: 'Filter Coffee',               category: 'Beverages',        price: 4.9,  station: 'bar' },
+  { name: 'Masala Chai',                 category: 'Beverages',        price: 4.9,  station: 'bar' },
+  { name: 'Lemon Lime Bitters',          category: 'Beverages',        price: 6.9,  station: 'bar' },
+  { name: 'Apple Juice',                 category: 'Beverages',        price: 4.9,  station: 'bar' },
+  { name: 'Rose Milk',                   category: 'Beverages',        price: 6.9,  station: 'bar' },
+  { name: 'Nannari Sarbath',             category: 'Beverages',        price: 6.9,  station: 'bar' },
+  { name: 'Soft Drinks — Coke / Coke No Sugar / Sprite / Fanta', category: 'Beverages', price: 5.9, station: 'bar' },
+  { name: 'Water Bottle',                category: 'Beverages',        price: 4.9,  station: 'bar' },
+  // ACCOMPANIMENTS
+  { name: 'Onion Cucumber Raitha',       category: 'Accompaniments',   price: 6.0,  station: 'kitchen' },
+  { name: 'Kachumber Salad',             category: 'Accompaniments',   price: 6.0,  station: 'kitchen' },
+  { name: 'Tomato Onion Salad',          category: 'Accompaniments',   price: 5.0,  station: 'kitchen' },
+  { name: 'Yoghurt',                     category: 'Accompaniments',   price: 4.0,  station: 'kitchen' },
+  { name: 'Spicy Mixed Pickle',          category: 'Accompaniments',   price: 4.0,  station: 'kitchen' },
+  { name: 'Mint Chutney',                category: 'Accompaniments',   price: 4.0,  station: 'kitchen' }
 ];
 
 export default function MenuImporter({ onDone }) {
@@ -36,7 +188,11 @@ export default function MenuImporter({ onDone }) {
     setError('');
     setParsing(true);
     try {
-      if (sourceType === 'excel') {
+      if (sourceType === 'preset') {
+        // Pre-loaded Sizzle N Sambar menu — no AI, no upload
+        setParsedItems(SNS_PRESET.map(i => ({ ...i, _include: true })));
+        setStep('review');
+      } else if (sourceType === 'excel') {
         const items = parseExcel(data);
         setParsedItems(items);
         setStep('review');
@@ -250,6 +406,33 @@ function SourceStep({ sourceType, setSourceType, onProcess, parsing }) {
       </div>
 
       {/* Source-specific UI */}
+      {sourceType === 'preset' && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{
+            background: 'var(--bg-2)', padding: 16, borderRadius: 8,
+            border: '1px solid var(--border)', marginBottom: 12,
+            fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6
+          }}>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+              <div><b style={{ color: 'var(--brand)', fontSize: 22 }}>127</b> <span style={{ color: 'var(--text-3)' }}>items</span></div>
+              <div><b style={{ color: 'var(--brand)', fontSize: 22 }}>22</b> <span style={{ color: 'var(--text-3)' }}>categories</span></div>
+            </div>
+            Pre-loaded menu from the SNS East Victoria Park printed menu. Includes:
+            Veg/Non-Veg Starters, SNS Specials (Kizhi Parotta, Paal Parotta, Nalli Fry, Kari Dosa,
+            Kothu Parotta, Neer Dosa, Meen Polichathu), Idli, Dosai, Poori & Batura, Biriyani, Rice,
+            Indian Breads, Veg / Chicken / Mutton / Lamb / Beef Curries, Fish & Prawns, Egg, Idiappam,
+            Fried Rice & Noodles, Saapadu, Desserts, Beverages, Accompaniments.
+          </div>
+          <button
+            className="btn btn-primary btn-lg btn-block"
+            disabled={parsing}
+            onClick={() => onProcess(null)}
+          >
+            {parsing ? 'Loading…' : `⚡ Load Sizzle N Sambar menu`}
+          </button>
+        </div>
+      )}
+
       {sourceType === 'paste' && (
         <div style={{ marginTop: 20 }}>
           <label style={{ display: 'block', fontSize: 13, marginBottom: 8, color: 'var(--text-2)' }}>
@@ -518,18 +701,21 @@ async function parsePdfText(arrayBuffer) {
 }
 
 async function parseImageWithAI({ data, mediaType }) {
-  // Use Claude vision API via the Anthropic /v1/messages endpoint
-  const prompt = `This is an image of a restaurant menu. Extract every menu item you can see. For each item, identify:
-- name (the dish name)
-- category (the section/header it's under, e.g. "Starters", "Mains", "Desserts")
-- price (in dollars, just the number)
-- station (one of: kitchen, bar — default kitchen unless it is clearly a drink which is bar)
-- description (any descriptive text, or empty string)
+  const prompt = `You are a menu parser. Extract every menu item from this image.
 
-Return ONLY a JSON array, no markdown, no explanation. Format:
-[{"name":"Samosa","category":"Starters","price":8,"station":"kitchen","description":"Crispy pastry with spiced potato"}]
+OUTPUT FORMAT — your entire response must be a single valid JSON array with NO preamble, NO markdown fences, NO explanation. Just the array, starting with [ and ending with ].
 
-If you can't read the menu clearly, return an empty array [].`;
+For each item provide:
+- name (string — the dish name only, no price)
+- category (string — the section header, e.g. "Starters", "Mains", "Drinks", "Desserts")
+- price (number — just the dollar amount, no currency symbol)
+- station ("kitchen" or "bar" — bar for drinks/cocktails, kitchen for everything else)
+- description (string — any descriptive text, or "" if none)
+
+Example output:
+[{"name":"Samosa","category":"Starters","price":8,"station":"kitchen","description":"Crispy pastry with spiced potato"},{"name":"Mango Lassi","category":"Drinks","price":6,"station":"bar","description":""}]
+
+If you cannot read the menu, return: []`;
 
   const response = await callClaude({
     messages: [{
@@ -544,15 +730,21 @@ If you can't read the menu clearly, return an empty array [].`;
 }
 
 async function parseWithAI(text) {
-  const prompt = `Below is a restaurant menu in raw text form. Extract every menu item. For each item, identify:
-- name
-- category (the section header, e.g. "Starters", "Mains", "Drinks")
-- price (number only, in dollars)
-- station (one of: kitchen, bar — default kitchen; bar for drinks)
-- description (any text describing the item, or empty string)
+  const prompt = `You are a menu parser. Extract every menu item from this raw text.
 
-Return ONLY a JSON array, no markdown, no explanation. Format:
+OUTPUT FORMAT — your entire response must be a single valid JSON array with NO preamble, NO markdown fences, NO explanation. Just the array.
+
+For each item provide:
+- name (string — the dish name only)
+- category (string — section header)
+- price (number — dollar amount only)
+- station ("kitchen" or "bar")
+- description (string — or "")
+
+Example output:
 [{"name":"Samosa","category":"Starters","price":8,"station":"kitchen","description":""}]
+
+If you cannot find any items, return: []
 
 Menu text:
 ${text}`;
@@ -566,7 +758,7 @@ ${text}`;
 // Use the Anthropic API directly (works in Claude artifacts and any environment
 // where api.anthropic.com is accessible). The key is provided via env or
 // localStorage for development. For production, route via a Cloud Function.
-async function callClaude({ messages }) {
+async function callClaude({ messages, maxTokens = 16000 }) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -577,29 +769,36 @@ async function callClaude({ messages }) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       messages
     })
   });
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`AI parser failed: ${err.slice(0, 200)}`);
+    // Common case: bad / missing API key
+    if (response.status === 401) {
+      localStorage.removeItem('hospostack.anthropic_key');
+      throw new Error('API key rejected. Click the importer again to enter a fresh key.');
+    }
+    throw new Error(`AI parser failed (HTTP ${response.status}): ${err.slice(0, 300)}`);
   }
   const data = await response.json();
   return data.content?.[0]?.text || '';
 }
 
 function getAnthropicKey() {
-  // Dev mode: read from localStorage. User pastes their own key once.
   const key = localStorage.getItem('hospostack.anthropic_key');
   if (!key) {
     const k = window.prompt(
       'AI parsing needs an Anthropic API key.\n\n' +
-      'Get one at console.anthropic.com → API Keys.\n' +
-      'It will be saved in this browser only.\n\n' +
-      'Paste your key:'
+      'Get one at console.anthropic.com → Settings → API Keys.\n' +
+      'It will be saved in this browser only and never sent anywhere else.\n\n' +
+      'Paste your key (starts with sk-ant-...):'
     );
-    if (!k) throw new Error('AI parsing cancelled');
+    if (!k || !k.trim()) throw new Error('AI parsing cancelled — no key provided');
+    if (!k.trim().startsWith('sk-ant-')) {
+      throw new Error('That doesn\'t look like an Anthropic API key (should start with sk-ant-). Try again.');
+    }
     localStorage.setItem('hospostack.anthropic_key', k.trim());
     return k.trim();
   }
@@ -607,29 +806,62 @@ function getAnthropicKey() {
 }
 
 function extractItemsFromAIResponse(text) {
-  // Strip code fences if any
-  let cleaned = text.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
-  // Find the JSON array
+  // Try multiple strategies in order. Don't give up on first failure.
+  if (!text || !text.trim()) {
+    throw new Error('AI returned an empty response. Check your API key has credit, or try a smaller portion of the menu.');
+  }
+
+  // Strategy 1: code fences
+  let cleaned = text.replace(/```(?:json)?\s*/gi, '').replace(/```\s*$/g, '').trim();
+
+  // Strategy 2: find first [ and last ]
   const start = cleaned.indexOf('[');
   const end = cleaned.lastIndexOf(']');
-  if (start === -1 || end === -1) {
-    throw new Error('AI did not return a parsable list. Try with clearer input.');
+  if (start !== -1 && end !== -1 && end > start) {
+    cleaned = cleaned.slice(start, end + 1);
   }
-  cleaned = cleaned.slice(start, end + 1);
+
+  // Strategy 3: try parsing as-is
+  let parsed;
   try {
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) throw new Error('Not an array');
-    return parsed.map(it => ({
-      name: String(it.name || '').trim(),
-      category: String(it.category || 'Other').trim(),
-      price: parseFloat(it.price) || 0,
-      station: ['kitchen', 'bar'].includes(it.station) ? it.station : 'kitchen',
-      description: String(it.description || '').trim(),
-      _include: true
-    })).filter(it => it.name);
-  } catch (e) {
-    throw new Error('Could not parse AI output as JSON');
+    parsed = JSON.parse(cleaned);
+  } catch (e1) {
+    // Strategy 4: AI may have truncated the array — repair common issues
+    // e.g. trailing comma, unterminated string, missing closing bracket
+    try {
+      // Drop everything after the last complete object
+      const lastCompleteObj = cleaned.lastIndexOf('}');
+      if (lastCompleteObj > 0) {
+        const repaired = cleaned.slice(0, lastCompleteObj + 1) + ']';
+        parsed = JSON.parse(repaired);
+      } else {
+        throw e1;
+      }
+    } catch (e2) {
+      // Final fallback: show what AI actually returned
+      const preview = text.slice(0, 200).replace(/\n/g, ' ');
+      throw new Error(
+        `AI response wasn't valid JSON. Got: "${preview}…"\n\n` +
+        `Try: shorter input, clearer image, or use the Excel template instead.`
+      );
+    }
   }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error('AI returned data but not as a list. Try a clearer source.');
+  }
+  if (parsed.length === 0) {
+    throw new Error('AI couldn\'t find any menu items. The image might be unclear or the text too jumbled.');
+  }
+
+  return parsed.map(it => ({
+    name: String(it.name || '').trim(),
+    category: String(it.category || 'Other').trim(),
+    price: parseFloat(it.price) || 0,
+    station: ['kitchen', 'bar'].includes(it.station) ? it.station : 'kitchen',
+    description: String(it.description || '').trim(),
+    _include: true
+  })).filter(it => it.name);
 }
 
 function fileToBase64(file) {
