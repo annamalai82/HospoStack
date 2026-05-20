@@ -1188,7 +1188,7 @@ export function VoidConfirmModal({ order, onCancel, onConfirm }) {
   };
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 80 }} onClick={!busy ? onCancel : undefined}>
+    <div className="void-modal-overlay" onClick={!busy ? onCancel : undefined}>
       <div className="void-modal" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="void-modal-head">

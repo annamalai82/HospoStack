@@ -1502,25 +1502,32 @@ main {
 .danger-zone-head p { font-size: 12px; color: var(--text-3); }
 
 /* ─── Void modal — mobile bottom-sheet, desktop centered ──────────────── */
+.void-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  z-index: 200; /* beats cart strip (90), mobile cart overlay (95), everything */
+  display: flex; align-items: flex-end; justify-content: center;
+}
+@media (min-width: 600px) {
+  .void-modal-overlay { align-items: center; padding: 24px; }
+}
+
 .void-modal {
   background: var(--surface);
   border: 1px solid rgba(248,113,113,0.3);
-  border-radius: 18px 18px 0 0;
+  border-radius: 20px 20px 0 0;
   width: 100%;
   max-width: 100%;
   display: flex; flex-direction: column;
-  /* Pinned to bottom on mobile */
-  position: fixed; bottom: 0; left: 0; right: 0;
-  max-height: 85vh;
-  z-index: 81;
+  /* Sheet height: enough for content but never taller than 80% viewport */
+  max-height: 80dvh;
 }
 @media (min-width: 600px) {
   .void-modal {
-    position: relative; bottom: auto; left: auto; right: auto;
     border-radius: 16px;
     max-width: 420px;
-    margin: auto;
-    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
   }
 }
 
@@ -1557,13 +1564,20 @@ main {
   font-size: 13px; color: var(--text-3); line-height: 1.6;
 }
 
-/* Sticky footer — buttons never scroll out of view */
+/* Sticky footer — ALWAYS visible, never hidden behind browser chrome */
 .void-modal-foot {
-  display: flex; gap: 10px; padding: 14px 16px;
-  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  display: flex; gap: 10px;
+  padding: 14px 16px;
+  /* Extra bottom padding for phone home indicator */
+  padding-bottom: max(20px, calc(env(safe-area-inset-bottom) + 14px));
   border-top: 1px solid var(--border);
   background: var(--surface);
+  border-radius: 0 0 20px 20px;
   flex-shrink: 0;
 }
-.void-modal-foot .btn-ghost { flex: 1; }
-.void-modal-foot .btn-danger { flex: 2; min-height: 52px; font-size: 16px; }
+.void-modal-foot .btn-ghost {
+  flex: 1; min-height: 56px; font-size: 15px;
+}
+.void-modal-foot .btn-danger {
+  flex: 2; min-height: 56px; font-size: 16px; font-weight: 700;
+}
