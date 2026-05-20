@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDevice } from '../context/DeviceContext';
-import { watchVenues } from '../lib/data';
+import { watchVenues, deleteEntireMenu } from '../lib/data';
 import MenuImporter from '../components/MenuImporter';
 import VenueSetupPanel from '../components/VenueSetupPanel';
 import GroupAdminPanel from '../components/GroupAdminPanel';
@@ -88,6 +88,23 @@ export default function ConfigMode() {
 }
 
 function OverviewSection({ device, venues, onJumpTo }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteToast, setDeleteToast] = useState(null);
+
+  const handleDeleteMenu = async () => {
+    setDeleting(true);
+    try {
+      const count = await deleteEntireMenu();
+      setShowDeleteConfirm(false);
+      setDeleteToast(`Deleted ${count} items and categories.`);
+      setTimeout(() => setDeleteToast(null), 3000);
+    } catch (e) {
+      setDeleteToast('Delete failed: ' + e.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
   const TILES = [
     { id: 'importer',   icon: '✨', title: 'Import a menu', blurb: 'Paste text, upload Excel/PDF/Word, or snap a photo of a handwritten menu.', cta: 'Start importing →' },
     { id: 'group',      icon: '🌐', title: 'Group dashboard', blurb: 'See live sales and tables across all venues in one place.', cta: 'Open dashboard →' },
@@ -135,6 +152,55 @@ function OverviewSection({ device, venues, onJumpTo }) {
           </button>
         ))}
       </div>
+
+      {/* ── Danger Zone ─────────────────────────────────────────── */}
+      <div className="danger-zone">
+        <div className="danger-zone-head">
+          <h4>⚠ Danger zone</h4>
+          <p>These actions cannot be undone. Proceed with caution.</p>
+        </div>
+        {deleteToast && (
+          <div style={{ padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 13, marginBottom: 10 }}>
+            {deleteToast}
+          </div>
+        )}
+        <button
+          className="btn btn-danger"
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={deleting}
+        >
+          🗑 Delete entire menu for {device.venueName}
+        </button>
+      </div>
+
+      {/* Delete confirm modal */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay" onClick={() => !deleting && setShowDeleteConfirm(false)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-head" style={{ background: 'var(--red-deep)', borderColor: 'rgba(248,113,113,0.3)' }}>
+              <h3 style={{ color: 'var(--red)' }}>🗑 Delete entire menu</h3>
+              <button className="icon-btn" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 14 }}>
+                This will permanently delete <b>all menu items and all categories</b> for <b style={{ color: 'var(--brand)' }}>{device.venueName}</b>.
+              </p>
+              <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: 12, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6 }}>
+                Orders and sales history are not affected. Only the menu configuration is deleted.
+                You can re-import a fresh menu immediately after.
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
+                Cancel
+              </button>
+              <button className="btn btn-danger btn-lg" onClick={handleDeleteMenu} disabled={deleting}>
+                {deleting ? 'Deleting…' : '🗑 Yes, delete entire menu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

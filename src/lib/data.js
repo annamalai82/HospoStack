@@ -500,6 +500,28 @@ export async function deleteMenuItem(itemId) {
   await deleteDoc(doc(db, 'venues', _venueId, 'menu_items', itemId));
 }
 
+// Delete all menu items + all menu categories for this venue in batches
+export async function deleteEntireMenu(onProgress) {
+  const [itemsSnap, catsSnap] = await Promise.all([
+    getDocs(col('menu_items')),
+    getDocs(col('menu_categories'))
+  ]);
+  const allDocs = [...itemsSnap.docs, ...catsSnap.docs];
+  if (allDocs.length === 0) return 0;
+
+  // Firestore batch limit is 500 writes
+  const CHUNK = 499;
+  let deleted = 0;
+  for (let i = 0; i < allDocs.length; i += CHUNK) {
+    const batch = (await import('firebase/firestore')).writeBatch(db);
+    allDocs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    deleted += Math.min(CHUNK, allDocs.length - i);
+    onProgress?.(deleted, allDocs.length);
+  }
+  return allDocs.length;
+}
+
 // ── Table CRUD ─────────────────────────────────────────────────────────────
 export async function createTable(payload) {
   const id = `t${payload.number}`;

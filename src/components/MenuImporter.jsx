@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import {
   getVenueId, createMenuCategory, createMenuItem,
-  watchCategories
+  watchCategories, deleteEntireMenu
 } from '../lib/data';
 import { useEffect } from 'react';
 
@@ -173,12 +173,14 @@ export default function MenuImporter({ onDone }) {
   const [step, setStep] = useState('source');
   const [sourceType, setSourceType] = useState(null);
   const [rawText, setRawText] = useState('');
-  const [parsedItems, setParsedItems] = useState([]); // [{name, category, price, station, description}]
+  const [parsedItems, setParsedItems] = useState([]);
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState('');
   const [existingCats, setExistingCats] = useState([]);
   const [importing, setImporting] = useState(false);
-  const [imported, setImported] = useState({ items: 0, categories: 0 });
+  const [importMode, setImportMode] = useState('append'); // 'append' | 'replace'
+  const [deleteProgress, setDeleteProgress] = useState(null); // { done, total } during replace
+  const [imported, setImported] = useState({ items: 0, categories: 0, deleted: 0 });
   const [createCategories, setCreateCategories] = useState(true);
 
   useEffect(() => watchCategories(setExistingCats), []);
@@ -229,21 +231,35 @@ export default function MenuImporter({ onDone }) {
   // ─── Import to Firestore ─────────────────────────────────────────────
   const handleImport = async () => {
     setImporting(true);
+    setDeleteProgress(null);
     let categoriesCreated = 0;
     let itemsCreated = 0;
+    let deletedCount = 0;
     try {
-      // Build a map of category-name → id (existing first)
+      // ── Replace mode: wipe existing menu first ──────────────────────
+      if (importMode === 'replace') {
+        setDeleteProgress({ done: 0, total: 1, phase: 'Deleting existing menu…' });
+        deletedCount = await deleteEntireMenu((done, total) => {
+          setDeleteProgress({ done, total, phase: `Deleting… ${done}/${total}` });
+        });
+        setDeleteProgress({ done: deletedCount, total: deletedCount, phase: 'Deleted. Creating new menu…' });
+        // After wipe, existingCats is stale — force empty catMap
+        existingCats.length = 0;
+      }
+
+      // ── Build category map ─────────────────────────────────────────
       const catMap = new Map();
       existingCats.forEach(c => catMap.set(c.name.toLowerCase().trim(), c.id));
 
-      // Create missing categories if user opted in
       if (createCategories) {
-        const neededCats = new Set(parsedItems.map(i => (i.category || 'Other').trim()));
+        const neededCats = new Set(
+          parsedItems.filter(i => i._include !== false).map(i => (i.category || 'Other').trim())
+        );
         for (const catName of neededCats) {
           if (!catMap.has(catName.toLowerCase())) {
             const id = await createMenuCategory({
               name: catName,
-              order: existingCats.length + categoriesCreated + 1,
+              order: (importMode === 'replace' ? 0 : existingCats.length) + categoriesCreated + 1,
               color: '#ff7a45',
               active: true
             });
@@ -253,7 +269,7 @@ export default function MenuImporter({ onDone }) {
         }
       }
 
-      // Create items
+      // ── Create items ──────────────────────────────────────────────
       for (const item of parsedItems) {
         if (!item._include) continue;
         const catName = (item.category || 'Other').trim();
@@ -270,13 +286,15 @@ export default function MenuImporter({ onDone }) {
         });
         itemsCreated++;
       }
-      setImported({ items: itemsCreated, categories: categoriesCreated });
+
+      setImported({ items: itemsCreated, categories: categoriesCreated, deleted: deletedCount });
       setStep('done');
       onDone?.();
     } catch (e) {
       setError('Import failed: ' + (e.message || e));
     } finally {
       setImporting(false);
+      setDeleteProgress(null);
     }
   };
 
@@ -326,6 +344,8 @@ export default function MenuImporter({ onDone }) {
         <ReviewStep
           items={parsedItems}
           existingCats={existingCats}
+          importMode={importMode}
+          setImportMode={setImportMode}
           createCategories={createCategories}
           setCreateCategories={setCreateCategories}
           onToggleInclude={toggleInclude}
@@ -334,6 +354,7 @@ export default function MenuImporter({ onDone }) {
           onBack={() => setStep('source')}
           onImport={handleImport}
           importing={importing}
+          deleteProgress={deleteProgress}
         />
       )}
 
@@ -341,9 +362,14 @@ export default function MenuImporter({ onDone }) {
       {step === 'done' && (
         <div className="importer-done">
           <div style={{ fontSize: 56 }}>🎉</div>
-          <h2>Menu imported</h2>
+          <h2>Menu {importMode === 'replace' ? 'replaced' : 'imported'}</h2>
+          {importMode === 'replace' && imported.deleted > 0 && (
+            <p style={{ color: 'var(--text-3)', fontSize: 13 }}>
+              Removed <b style={{ color: 'var(--red)' }}>{imported.deleted}</b> old items &amp; categories.
+            </p>
+          )}
           <p>
-            Added <b style={{ color: 'var(--green)' }}>{imported.items}</b> menu items
+            Added <b style={{ color: 'var(--green)' }}>{imported.items}</b> items
             and <b style={{ color: 'var(--green)' }}>{imported.categories}</b> categories
             to your venue.
           </p>
@@ -353,7 +379,8 @@ export default function MenuImporter({ onDone }) {
               setSourceType(null);
               setParsedItems([]);
               setRawText('');
-              setImported({ items: 0, categories: 0 });
+              setImported({ items: 0, categories: 0, deleted: 0 });
+              setImportMode('append');
             }}>Import another</button>
           </div>
         </div>
@@ -499,7 +526,7 @@ function SourceStep({ sourceType, setSourceType, onProcess, parsing }) {
 // ───────────────────────────────────────────────────────────────────────
 // Step 2: review & edit before commit
 // ───────────────────────────────────────────────────────────────────────
-function ReviewStep({ items, existingCats, createCategories, setCreateCategories, onToggleInclude, onUpdate, onRemove, onBack, onImport, importing }) {
+function ReviewStep({ items, existingCats, importMode, setImportMode, createCategories, setCreateCategories, onToggleInclude, onUpdate, onRemove, onBack, onImport, importing, deleteProgress }) {
   const includedCount = items.filter(i => i._include !== false).length;
   const newCats = new Set();
   items.forEach(i => {
@@ -509,14 +536,51 @@ function ReviewStep({ items, existingCats, createCategories, setCreateCategories
       newCats.add(i.category || 'Other');
     }
   });
+  const hasExisting = existingCats.length > 0;
 
   return (
     <div>
       <h2>Review and edit</h2>
       <p style={{ color: 'var(--text-3)', marginBottom: 16, fontSize: 14 }}>
         Found <b style={{ color: 'var(--text)' }}>{items.length}</b> items.
-        Untick anything you don't want. Edit fields inline. Then import.
+        Untick anything you don't want. Edit inline. Then choose how to import.
       </p>
+
+      {/* ── Replace vs Append toggle ─────────────────────────────── */}
+      <div className="import-mode-toggle">
+        <button
+          className={`import-mode-btn ${importMode === 'append' ? 'active' : ''}`}
+          onClick={() => setImportMode('append')}
+        >
+          <div className="import-mode-icon">➕</div>
+          <div>
+            <div className="import-mode-label">Add to existing menu</div>
+            <div className="import-mode-sub">New items added alongside what's already there</div>
+          </div>
+        </button>
+        <button
+          className={`import-mode-btn ${importMode === 'replace' ? 'active replace' : ''}`}
+          onClick={() => setImportMode('replace')}
+        >
+          <div className="import-mode-icon">🔄</div>
+          <div>
+            <div className="import-mode-label">Replace entire menu</div>
+            <div className="import-mode-sub">
+              {hasExisting
+                ? `Deletes all ${existingCats.length} existing categories + items first`
+                : 'Menu is currently empty — same as Add'}
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* Replace mode warning */}
+      {importMode === 'replace' && hasExisting && (
+        <div className="import-replace-warning">
+          ⚠ <b>This will permanently delete {existingCats.length} categories and all items in them</b> before
+          importing. This cannot be undone. Make sure you've reviewed the list below.
+        </div>
+      )}
 
       {/* Summary banner */}
       <div className="importer-summary">
@@ -618,11 +682,18 @@ function ReviewStep({ items, existingCats, createCategories, setCreateCategories
       <div className="importer-actions">
         <button className="btn" onClick={onBack} disabled={importing}>← Back</button>
         <button
-          className="btn btn-primary btn-lg"
+          className={`btn btn-lg ${importMode === 'replace' ? 'btn-danger' : 'btn-primary'}`}
           disabled={includedCount === 0 || importing}
           onClick={onImport}
         >
-          {importing ? 'Importing…' : `✓ Import ${includedCount} items`}
+          {importing
+            ? (deleteProgress
+                ? deleteProgress.phase
+                : `Importing ${includedCount} items…`)
+            : importMode === 'replace'
+              ? `🔄 Replace menu with ${includedCount} items`
+              : `✓ Add ${includedCount} items`
+          }
         </button>
       </div>
     </div>
