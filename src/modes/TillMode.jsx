@@ -898,9 +898,18 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
           </div>
           <div className="pay-head-right">
             <div className="total">${total.toFixed(2)}</div>
-            <button className="btn-split" onClick={() => { setSplitMode('persons'); setStage('split'); }}>
-              ⇌ Split payment
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {onVoid && (
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={onVoid}
+                  style={{ fontSize: 13, padding: '7px 12px' }}
+                >🚫 Void</button>
+              )}
+              <button className="btn-split" onClick={() => { setSplitMode('persons'); setStage('split'); }}>
+                ⇌ Split
+              </button>
+            </div>
           </div>
         </div>
         <div className="pay-body">
@@ -969,12 +978,7 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
             )}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            {onVoid && (
-              <button className="btn btn-danger btn-sm" onClick={onVoid} title="Void this order">
-                🚫 Void Order
-              </button>
-            )}
-            <button className="btn-ghost" onClick={onCancel}>Cancel</button>
+            <button className="btn-ghost" onClick={onCancel}>← Back</button>
             <button
               className="btn btn-success"
               disabled={balance > 0.005}
@@ -1172,7 +1176,9 @@ export function VoidConfirmModal({ order, onCancel, onConfirm }) {
   const [busy, setBusy] = useState(false);
   const label = order?.tableId
     ? `Table ${order.tableNumber || order.tableId.replace('t','')}`
-    : order?.id ? `#${order.id.slice(-4).toUpperCase()}` : 'this order';
+    : order?.customerName
+      ? order.customerName
+      : order?.id ? `#${order.id.slice(-4).toUpperCase()}` : 'this order';
   const total = order?.total || 0;
 
   const confirm = async () => {
@@ -1182,40 +1188,35 @@ export function VoidConfirmModal({ order, onCancel, onConfirm }) {
   };
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 80 }} onClick={onCancel}>
-      <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-head" style={{ background: 'var(--red-deep)', borderColor: 'rgba(248,113,113,0.3)' }}>
-          <h3 style={{ color: 'var(--red)' }}>🚫 Void Order</h3>
-          <button className="icon-btn" onClick={onCancel}>×</button>
+    <div className="modal-overlay" style={{ zIndex: 80 }} onClick={!busy ? onCancel : undefined}>
+      <div className="void-modal" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="void-modal-head">
+          <span>🚫 Void Order</span>
+          <button className="icon-btn" onClick={onCancel} disabled={busy}>×</button>
         </div>
-        <div className="modal-body">
-          <p style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, lineHeight: 1.5 }}>
-            Are you sure you want to void <b>{label}</b>?
-          </p>
+        {/* Body */}
+        <div className="void-modal-body">
+          <div className="void-label">Void <b>{label}</b>?</div>
           {total > 0 && (
-            <div style={{
-              background: 'var(--red-deep)', border: '1px solid rgba(248,113,113,0.25)',
-              borderRadius: 10, padding: '14px 18px', marginBottom: 16,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-            }}>
-              <span style={{ color: 'var(--text-2)', fontSize: 14 }}>Order total</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color: 'var(--red)' }}>
-                ${total.toFixed(2)}
-              </span>
+            <div className="void-total-row">
+              <span>Order total</span>
+              <span className="void-total-amount">${total.toFixed(2)}</span>
             </div>
           )}
-          <div style={{
-            background: 'var(--surface-2)', borderRadius: 8, padding: 12,
-            fontSize: 13, color: 'var(--text-3)', lineHeight: 1.6
-          }}>
-            This will cancel the order and remove it from the Kitchen Display.
-            {order?.tableId && ' The table will be freed.'} This cannot be undone.
+          <div className="void-info">
+            Cancels the order and removes it from the Kitchen Display.
+            {order?.tableId && ' Table will be freed.'}
+            {' '}Cannot be undone.
           </div>
         </div>
-        <div className="modal-foot">
-          <button className="btn-ghost" onClick={onCancel} disabled={busy}>Keep Order</button>
+        {/* Sticky footer — always visible */}
+        <div className="void-modal-foot">
+          <button className="btn-ghost" onClick={onCancel} disabled={busy}>
+            Keep Order
+          </button>
           <button className="btn btn-danger btn-lg" onClick={confirm} disabled={busy}>
-            {busy ? 'Voiding…' : '🚫 Yes, Void Order'}
+            {busy ? 'Voiding…' : '🚫 Void Order'}
           </button>
         </div>
       </div>
