@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   watchKitchenOrders, bumpOrderItem, updateOrder,
-  extendOrderWait, watchVenue, updateVenue
+  extendOrderWait, watchVenue, updateVenue, watchTables
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 
@@ -12,34 +12,25 @@ const STATIONS = [
 ];
 
 const DEFAULT_WARN_MINS  = 8;
-const DEFAULT_ALERT_MINS = 20; // configurable
-const EXTEND_MINS = 5;         // each extension adds 5 minutes
+const DEFAULT_ALERT_MINS = 20;
+const EXTEND_MINS = 5;
 
 export default function KitchenMode() {
   const { device } = useDevice();
-  const [orders, setOrders] = useState([]);
-  const [station, setStation] = useState('all');
-  const [tick, setTick] = useState(0);
-  const [venue, setVenue] = useState(null);
+  const [orders, setOrders]     = useState([]);
+  const [tables, setTables]     = useState([]);
+  const [station, setStation]   = useState('all');
+  const [venue, setVenue]       = useState(null);
   const [showConfig, setShowConfig] = useState(false);
+  // collapsed: orderId -> bool. Default true (collapsed) for busy-day UX.
   const [collapsed, setCollapsed] = useState({});
+  // Track which orderIds we've seen so new ones default to expanded
+  const seenIds = useRef(new Set());
 
-  // Re-subscribe whenever venueId changes (ensures we're watching the right venue)
   const venueId = device?.venueId;
-  useEffect(() => {
-    if (!venueId) return;
-    return watchKitchenOrders(setOrders);
-  }, [venueId]);
-  useEffect(() => {
-    if (!venueId) return;
-    return watchVenue(setVenue);
-  }, [venueId]);
-
-  // Re-render every 10s for live timing
-  useEffect(() => {
-    const t = setInterval(() => setTick(x => x + 1), 10000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { if (!venueId) return; return watchKitchenOrders(setOrders); }, [venueId]);
+  useEffect(() => { if (!venueId) return; return watchVenue(setVenue); }, [venueId]);
+  useEffect(() => { if (!venueId) return; return watchTables(setTables); }, [venueId]);
 
   const alertMins = venue?.kdsAlertMins ?? DEFAULT_ALERT_MINS;
   const warnMins  = venue?.kdsWarnMins  ?? DEFAULT_WARN_MINS;
@@ -55,22 +46,42 @@ export default function KitchenMode() {
         return { order: o, allItems, visibleIndices };
       })
       .filter(t => t.visibleIndices.length > 0)
+      // Newest first — most recent order at top
       .sort((a, b) =>
-        (a.order.sentAt?.toMillis?.() || 0) - (b.order.sentAt?.toMillis?.() || 0)
+        (b.order.sentAt?.toMillis?.() || 0) - (a.order.sentAt?.toMillis?.() || 0)
       );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, station, tick]);
+  }, [orders, station]);
 
-  const toggleCollapse = (orderId) =>
-    setCollapsed(c => ({ ...c, [orderId]: !c[orderId] }));
+  // Auto-expand new tickets as they arrive; keep existing collapse state
+  useEffect(() => {
+    setCollapsed(prev => {
+      const next = { ...prev };
+      let changed = false;
+      tickets.forEach(t => {
+        const id = t.order.id;
+        if (!seenIds.current.has(id)) {
+          seenIds.current.add(id);
+          next[id] = false; // new ticket: expanded
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [tickets]);
 
-  const totalActive = tickets.length;
-  const totalItems = tickets.reduce((n, t) =>
+  const toggleCollapse   = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
+  const collapseAll      = () => setCollapsed(Object.fromEntries(tickets.map(t => [t.order.id, true])));
+  const expandAll        = () => setCollapsed(Object.fromEntries(tickets.map(t => [t.order.id, false])));
+
+  const totalActive  = tickets.length;
+  const totalItems   = tickets.reduce((n, t) =>
     n + t.visibleIndices.filter(i => t.allItems[i].status !== 'ready').length, 0);
   const overdueCount = tickets.filter(t => {
     const ms = t.order.sentAt?.toMillis?.() || Date.now();
     return (Date.now() - ms) / 60000 >= alertMins;
   }).length;
+
+  const allCollapsed = tickets.length > 0 && tickets.every(t => collapsed[t.order.id]);
 
   return (
     <div className="kds">
@@ -82,17 +93,27 @@ export default function KitchenMode() {
             </button>
           ))}
         </div>
+
         <div className="kds-stats">
           <span>Tickets: <b>{totalActive}</b></span>
           <span>Items: <b>{totalItems}</b></span>
           {overdueCount > 0 && (
-            <span style={{ color: 'var(--red)', fontWeight: 600 }}>
-              🔥 {overdueCount} overdue
-            </span>
+            <span style={{ color: 'var(--red)', fontWeight: 600 }}>🔥 {overdueCount} overdue</span>
+          )}
+        </div>
+
+        <div className="kds-toolbar-actions">
+          {tickets.length > 0 && (
+            <button
+              onClick={allCollapsed ? expandAll : collapseAll}
+              style={{ fontSize: 11, padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-2)' }}
+            >
+              {allCollapsed ? '▸ Expand All' : '▾ Collapse All'}
+            </button>
           )}
           <button
             onClick={() => setShowConfig(true)}
-            style={{ fontSize: 11, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-3)', marginLeft: 4 }}
+            style={{ fontSize: 11, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-3)' }}
           >⚙ Timers</button>
         </div>
       </div>
@@ -114,6 +135,7 @@ export default function KitchenMode() {
               alertMins={alertMins}
               collapsed={!!collapsed[t.order.id]}
               onToggleCollapse={() => toggleCollapse(t.order.id)}
+              tables={tables}
             />
           ))}
         </div>
@@ -135,12 +157,19 @@ export default function KitchenMode() {
 }
 
 /* ── Ticket ──────────────────────────────────────────────────────────── */
-function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapsed, onToggleCollapse }) {
-  const sentMs = order.sentAt?.toMillis?.() || Date.now();
-  const ageMs  = Date.now() - sentMs;
-  const ageSec = Math.floor(ageMs / 1000);
-  const ageMin = Math.floor(ageSec / 60);
-  const ss = (ageSec % 60).toString().padStart(2, '0');
+function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapsed, onToggleCollapse, tables }) {
+  // Own 1-second interval so the clock actually ticks every second
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const sentMs  = order.sentAt?.toMillis?.() || Date.now();
+  const ageMs   = Date.now() - sentMs;
+  const ageSec  = Math.floor(ageMs / 1000);
+  const ageMin  = Math.floor(ageSec / 60);
+  const ss      = (ageSec % 60).toString().padStart(2, '0');
 
   const isOverdue = ageMin >= alertMins;
   const isWarning = ageMin >= warnMins && !isOverdue;
@@ -149,6 +178,8 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
   const extensions = order.waitExtensions || 0;
   const doneCount  = visibleIndices.filter(i => allItems[i].status === 'ready').length;
   const totalCount = visibleIndices.length;
+
+  const [showMoveTable, setShowMoveTable] = useState(false);
 
   const handleBump = async (originalIndex) => {
     const it = allItems[originalIndex];
@@ -175,16 +206,24 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
     await extendOrderWait(order.id, EXTEND_MINS);
   };
 
-  const orderNumber = (order.id || '').slice(-4).toUpperCase();
-  const isDineIn = !!order.tableId;
+  const handleMoveTable = async (newTable) => {
+    await updateOrder(order.id, {
+      tableId: newTable.id,
+      tableNumber: newTable.number
+    });
+    setShowMoveTable(false);
+  };
+
+  const isDineIn     = !!order.tableId;
   const primaryLabel = isDineIn
     ? `Table ${order.tableNumber || order.tableId.replace('t', '')}`
-    : (order.customerName || `Takeaway #${orderNumber}`);
+    : (order.customerName || 'Takeaway');
   const typeBadge = isDineIn ? 'DINE-IN' : 'TAKEAWAY';
 
   return (
     <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'}`}>
-      {/* ── Header — tap to collapse/expand ── */}
+
+      {/* ── Header ── */}
       <button className="kds-ticket-head" onClick={onToggleCollapse}>
         <div className="kds-ticket-head-left">
           <div className={`kds-type-badge ${isDineIn ? 'dinein' : 'takeaway'}`}>
@@ -192,12 +231,11 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
           </div>
           <div className="kds-primary-label">{primaryLabel}</div>
           <div className="kds-secondary">
-            {!order.customerName && <span className="kds-order-num">#{orderNumber}</span>}
             <span className={`kds-progress ${doneCount === totalCount ? 'done' : ''}`}>
-              {doneCount}/{totalCount}
+              {doneCount}/{totalCount} done
             </span>
             {extensions > 0 && (
-              <span className="kds-extensions" title={`Wait extended ${extensions} time${extensions === 1 ? '' : 's'}`}>
+              <span className="kds-extensions" title={`Extended ${extensions}×`}>
                 +{extensions}⏱
               </span>
             )}
@@ -207,11 +245,11 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
           <b className={`kds-time ${isOverdue ? 'time-overdue' : isWarning ? 'time-warn' : ''}`}>
             {ageMin}:{ss}
           </b>
-          <span className="collapse-icon">{collapsed ? '▸ tap to expand' : '▾'}</span>
+          <span className="collapse-icon">{collapsed ? '▸' : '▾'}</span>
         </div>
       </button>
 
-      {/* ── Items — hidden when collapsed ── */}
+      {/* ── Items ── */}
       {!collapsed && (
         <>
           <div className="kds-items">
@@ -222,6 +260,7 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
                   <span className="qty">{it.qty}×</span>
                   <span className="label">
                     {it.name}
+                    {it.isMisc && <span style={{ fontSize: 10, color: 'var(--amber)', marginLeft: 6, fontWeight: 600 }}>MISC</span>}
                     {(it.selections || []).length > 0 && (
                       <span style={{ display: 'block', fontSize: 12, color: 'var(--blue)', marginTop: 2, fontWeight: 500 }}>
                         {it.selections.map(s => s.label).join(' · ')}
@@ -238,16 +277,22 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
           </div>
 
           <div className="kds-ticket-foot">
-            {/* Extend wait time */}
-            <button
-              className="btn btn-extend"
-              onClick={handleExtend}
-              title={`Add ${EXTEND_MINS} min`}
-            >
+            <button className="btn btn-extend" onClick={handleExtend} title={`Add ${EXTEND_MINS} min`}>
               +{EXTEND_MINS}m
               {extensions > 0 && <span className="ext-badge">{extensions}</span>}
             </button>
-            {/* Ready / Served */}
+
+            {/* Move table — only for dine-in */}
+            {isDineIn && (
+              <button
+                className="btn"
+                style={{ fontSize: 12, background: 'var(--surface-3)', color: 'var(--text-2)' }}
+                onClick={e => { e.stopPropagation(); setShowMoveTable(true); }}
+              >
+                ⇄ Move Table
+              </button>
+            )}
+
             {order.status === 'ready'
               ? <button className="btn btn-success" onClick={handleServed}>Mark Served</button>
               : <button className="btn btn-ready" onClick={handleAllReady}>All Ready</button>
@@ -266,6 +311,63 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
           {doneCount > 0 && <span className="collapsed-progress">{doneCount}/{totalCount} done</span>}
         </div>
       )}
+
+      {/* ── Move Table modal ── */}
+      {showMoveTable && (
+        <MoveTableModal
+          currentTableId={order.tableId}
+          tables={tables}
+          onMove={handleMoveTable}
+          onClose={() => setShowMoveTable(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Move Table Modal ────────────────────────────────────────────────── */
+function MoveTableModal({ currentTableId, tables, onMove, onClose }) {
+  const available = tables.filter(t => t.id !== currentTableId);
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 340 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3>Move to Table</h3>
+          <button className="icon-btn" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body" style={{ padding: '8px 0' }}>
+          {available.length === 0 ? (
+            <p style={{ color: 'var(--text-3)', padding: '0 16px' }}>No other tables available.</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, padding: '0 16px' }}>
+              {available.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => onMove(t)}
+                  style={{
+                    padding: '12px 6px',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: t.status === 'free' ? 'var(--surface-2)' : 'var(--surface-3)',
+                    color: t.status === 'free' ? 'var(--text-1)' : 'var(--text-3)',
+                    fontWeight: 600,
+                    fontSize: 15,
+                    cursor: 'pointer'
+                  }}
+                >
+                  T{t.number}
+                  <div style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-3)', marginTop: 2 }}>
+                    {t.status === 'free' ? 'free' : t.status}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-foot">
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -284,11 +386,11 @@ function WaitConfigModal({ warnMins, alertMins, onSave, onClose }) {
         </div>
         <div className="modal-body">
           <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 18, lineHeight: 1.5 }}>
-            Tickets change colour when they exceed these thresholds. Kitchen staff can also extend a ticket's timer using the +5m button.
+            Tickets change colour when they exceed these thresholds.
           </p>
           <div className="field">
             <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 999, background: 'var(--amber)', display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ width: 12, height: 12, borderRadius: 999, background: 'var(--amber)', display: 'inline-block' }} />
               Amber warning after (mins)
             </label>
             <input
@@ -300,7 +402,7 @@ function WaitConfigModal({ warnMins, alertMins, onSave, onClose }) {
           </div>
           <div className="field">
             <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 999, background: 'var(--red)', display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ width: 12, height: 12, borderRadius: 999, background: 'var(--red)', display: 'inline-block' }} />
               Red alert after (mins)
             </label>
             <input
@@ -311,7 +413,7 @@ function WaitConfigModal({ warnMins, alertMins, onSave, onClose }) {
             />
           </div>
           <p style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5, marginTop: 4 }}>
-            These settings apply to all Kitchen Display devices for this venue immediately.
+            These settings apply to all KDS devices for this venue immediately.
           </p>
         </div>
         <div className="modal-foot">
