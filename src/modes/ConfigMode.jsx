@@ -4,6 +4,7 @@ import { watchVenues, watchMenuItems, deleteEntireMenu } from '../lib/data';
 import MenuImporter from '../components/MenuImporter';
 import VenueSetupPanel from '../components/VenueSetupPanel';
 import GroupAdminPanel from '../components/GroupAdminPanel';
+import EftposReconPanel from '../components/EftposReconPanel';
 import MenuPanel from '../components/MenuPanel';
 import CategoriesPanel from '../components/CategoriesPanel';
 import ModifiersPanel from '../components/ModifiersPanel';
@@ -13,6 +14,7 @@ import UsersPanel from '../components/UsersPanel';
 const SECTIONS = [
   { id: 'overview',   label: 'Overview',          icon: '🏠' },
   { id: 'group',      label: 'Group Admin',       icon: '🌐' },
+  { id: 'eftpos',     label: 'EFTPOS Reconcile',  icon: '💳' },
   { id: 'importer',   label: 'Menu Importer',     icon: '✨' },
   { id: 'menu',       label: 'Menu Items',        icon: '🍴' },
   { id: 'categories', label: 'Categories',        icon: '📂' },
@@ -75,6 +77,7 @@ export default function ConfigMode() {
       <main className="config-body">
         {section === 'overview'   && <OverviewSection device={device} venues={venues} onJumpTo={setSection} />}
         {section === 'group'      && <GroupAdminPanel onToast={showToast} />}
+        {section === 'eftpos'     && <EftposReconPanel />}
         {section === 'importer'   && <MenuImporter onDone={() => showToast('Menu imported', 'info')} />}
         {section === 'menu'       && <MenuPanel onToast={showToast} />}
         {section === 'categories' && <CategoriesPanel onToast={showToast} />}

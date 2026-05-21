@@ -629,6 +629,7 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
   const change = paid > total ? +(paid - total).toFixed(2) : 0;
 
   const [showVoucher, setShowVoucher] = useState(false);
+  const [eftposPending, setEftposPending] = useState(null); // { amount, seat? } when EFTPOS tapped, waiting for terminal confirm
 
   const pressKey = (k) => {
     if (k === 'C') return setAmount('');
@@ -643,8 +644,34 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
     if (method === 'voucher') { setShowVoucher(true); return; }
     const amt = method === 'cash' ? (parseFloat(amount) || balance) : balance;
     if (amt <= 0) return;
+
+    // EFTPOS goes through a confirmation step — manual Tyro terminal flow
+    if (method === 'eftpos') {
+      setEftposPending({
+        amount: +Math.min(amt, balance + 1000).toFixed(2),
+        seat: null
+      });
+      return;
+    }
+
     const next = [...payments, { method, amount: +Math.min(amt, balance + 1000).toFixed(2), ts: Date.now() }];
     setPayments(next);
+    setAmount('');
+  };
+
+  // ── EFTPOS confirm — records once cashier confirms terminal approved ──
+  const confirmEftpos = (authCode, last4) => {
+    if (!eftposPending) return;
+    const entry = {
+      method: 'eftpos',
+      amount: eftposPending.amount,
+      ts: Date.now(),
+      ...(eftposPending.seat !== null ? { seat: eftposPending.seat } : {}),
+      ...(authCode ? { authCode } : {}),
+      ...(last4 ? { last4 } : {})
+    };
+    setPayments([...payments, entry]);
+    setEftposPending(null);
     setAmount('');
   };
 
@@ -752,7 +779,11 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
                               {['cash','card','eftpos'].map(m => (
                                 <button key={m} className="btn btn-sm" style={{ padding: '8px 10px', fontSize: 12 }}
                                   onClick={() => {
-                                    setPayments([...payments, { method: m, amount: perPersonAmount, seat: s, ts: Date.now() }]);
+                                    if (m === 'eftpos') {
+                                      setEftposPending({ amount: perPersonAmount, seat: s });
+                                    } else {
+                                      setPayments([...payments, { method: m, amount: perPersonAmount, seat: s, ts: Date.now() }]);
+                                    }
                                   }}
                                 >{m}</button>
                               ))}
@@ -832,7 +863,14 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
                             <div style={{ display: 'flex', gap: 6 }}>
                               {['cash','card','eftpos'].map(m => (
                                 <button key={m} className="btn btn-sm" style={{ padding: '8px 10px', fontSize: 12 }}
-                                  onClick={() => setPayments([...payments, { method: m, amount: +seatTotal.toFixed(2), seat: s, ts: Date.now() }])}
+                                  onClick={() => {
+                                    const amt = +seatTotal.toFixed(2);
+                                    if (m === 'eftpos') {
+                                      setEftposPending({ amount: amt, seat: s });
+                                    } else {
+                                      setPayments([...payments, { method: m, amount: amt, seat: s, ts: Date.now() }]);
+                                    }
+                                  }}
                                 >{m}</button>
                               ))}
                             </div>
@@ -970,6 +1008,12 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
             {payments.map((p, i) => (
               <span key={i} className="payment-chip">
                 {p.method === 'voucher' && p.code ? `🎟 ${p.code}` : p.method} ${p.amount.toFixed(2)}
+                {p.method === 'eftpos' && p.authCode && (
+                  <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>·{p.authCode}</span>
+                )}
+                {p.method === 'eftpos' && p.last4 && (
+                  <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>···{p.last4}</span>
+                )}
               </span>
             ))}
             {change > 0 && (
@@ -996,6 +1040,15 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
           orderTotal={total}
           onCancel={() => setShowVoucher(false)}
           onApplied={handleVoucherApplied}
+        />
+      )}
+
+      {eftposPending && (
+        <EftposConfirmModal
+          amount={eftposPending.amount}
+          seat={eftposPending.seat}
+          onCancel={() => setEftposPending(null)}
+          onConfirm={confirmEftpos}
         />
       )}
     </div>
@@ -1170,6 +1223,86 @@ function calcTotals(items) {
   const total = +subtotal.toFixed(2);
   const gst = +(subtotal * (10 / 110)).toFixed(2);
   return { subtotal: +subtotal.toFixed(2), gst, total };
+}
+
+// ── EFTPOS confirm modal — manual Tyro terminal flow ───────────────────
+function EftposConfirmModal({ amount, seat, onCancel, onConfirm }) {
+  const [authCode, setAuthCode] = useState('');
+  const [last4, setLast4] = useState('');
+
+  return (
+    <div className="void-modal-overlay" onClick={onCancel}>
+      <div className="void-modal" onClick={e => e.stopPropagation()}>
+        <div className="void-modal-head" style={{ background: 'var(--blue-deep)', color: 'var(--blue)', borderColor: 'rgba(96,165,250,0.3)' }}>
+          <span>💳 Run on Tyro terminal</span>
+          <button className="icon-btn" onClick={onCancel}>×</button>
+        </div>
+        <div className="void-modal-body">
+          <div style={{
+            background: 'var(--surface-2)', borderRadius: 10,
+            padding: '16px 18px', marginBottom: 14,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+          }}>
+            <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+              Run on terminal{seat !== null && seat !== undefined ? ` for Person ${seat + 1}` : ''}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 26, fontWeight: 700, color: 'var(--brand)' }}>
+              ${amount.toFixed(2)}
+            </span>
+          </div>
+
+          <div style={{
+            background: 'var(--blue-deep)', border: '1px solid rgba(96,165,250,0.25)',
+            borderRadius: 8, padding: 12, fontSize: 13,
+            color: 'var(--blue)', lineHeight: 1.6, marginBottom: 16
+          }}>
+            <b>1.</b> Punch <b>${amount.toFixed(2)}</b> into the Tyro terminal<br/>
+            <b>2.</b> Customer taps / inserts card<br/>
+            <b>3.</b> Wait for the <b>APPROVED</b> beep<br/>
+            <b>4.</b> Tap "Approved" below to record this payment
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Auth code <span style={{ color: 'var(--text-3)' }}>(optional)</span></label>
+              <input
+                value={authCode}
+                onChange={e => setAuthCode(e.target.value.replace(/[^A-Z0-9]/gi, '').slice(0, 8))}
+                placeholder="from receipt"
+                inputMode="numeric"
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 15, textAlign: 'center' }}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Last 4 digits <span style={{ color: 'var(--text-3)' }}>(optional)</span></label>
+              <input
+                value={last4}
+                onChange={e => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                inputMode="numeric"
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 15, textAlign: 'center', letterSpacing: '0.2em' }}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.5 }}>
+            Auth code helps with refund tracking. Last 4 digits help match the card if the customer queries the charge later.
+          </div>
+        </div>
+        <div className="void-modal-foot">
+          <button className="btn-ghost" onClick={onCancel}>
+            ✗ Declined / Cancel
+          </button>
+          <button
+            className="btn btn-lg"
+            onClick={() => onConfirm(authCode || null, last4 || null)}
+            style={{ background: 'var(--green)', color: '#0a1f12', fontWeight: 700, flex: 2 }}
+          >
+            ✓ Approved · ${amount.toFixed(2)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Void confirm modal ───────────────────────────────────────────────────
