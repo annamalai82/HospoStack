@@ -826,17 +826,19 @@ ${text}`;
   return extractItemsFromAIResponse(response);
 }
 
-// Use the Anthropic API directly (works in Claude artifacts and any environment
-// where api.anthropic.com is accessible). The key is provided via env or
-// localStorage for development. For production, route via a Cloud Function.
+// ── Anthropic API caller ────────────────────────────────────────────────────
+// Production: set VITE_ANTHROPIC_KEY in Vercel → Project → Settings →
+// Environment Variables. Vite bakes it into the bundle at deploy time.
+// Local dev: add VITE_ANTHROPIC_KEY=sk-ant-... to a .env.local file.
 async function callClaude({ messages, maxTokens = 16000 }) {
+  const key = getAnthropicKey();
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
-      'x-api-key': getAnthropicKey()
+      'x-api-key': key
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
@@ -846,10 +848,8 @@ async function callClaude({ messages, maxTokens = 16000 }) {
   });
   if (!response.ok) {
     const err = await response.text();
-    // Common case: bad / missing API key
     if (response.status === 401) {
-      localStorage.removeItem('hospostack.anthropic_key');
-      throw new Error('API key rejected. Click the importer again to enter a fresh key.');
+      throw new Error('Anthropic API key rejected (401). Check VITE_ANTHROPIC_KEY in Vercel environment variables.');
     }
     throw new Error(`AI parser failed (HTTP ${response.status}): ${err.slice(0, 300)}`);
   }
@@ -858,22 +858,19 @@ async function callClaude({ messages, maxTokens = 16000 }) {
 }
 
 function getAnthropicKey() {
-  const key = localStorage.getItem('hospostack.anthropic_key');
-  if (!key) {
-    const k = window.prompt(
-      'AI parsing needs an Anthropic API key.\n\n' +
-      'Get one at console.anthropic.com → Settings → API Keys.\n' +
-      'It will be saved in this browser only and never sent anywhere else.\n\n' +
-      'Paste your key (starts with sk-ant-...):'
-    );
-    if (!k || !k.trim()) throw new Error('AI parsing cancelled — no key provided');
-    if (!k.trim().startsWith('sk-ant-')) {
-      throw new Error('That doesn\'t look like an Anthropic API key (should start with sk-ant-). Try again.');
-    }
-    localStorage.setItem('hospostack.anthropic_key', k.trim());
-    return k.trim();
-  }
-  return key;
+  // 1. Build-time env var — set in Vercel Project → Settings → Environment Variables
+  const envKey = import.meta.env.VITE_ANTHROPIC_KEY;
+  if (envKey && envKey.trim().startsWith('sk-ant-')) return envKey.trim();
+
+  // 2. Local dev fallback — .env.local file: VITE_ANTHROPIC_KEY=sk-ant-...
+  //    (localStorage legacy also accepted so existing dev setups keep working)
+  const localKey = localStorage.getItem('hospostack.anthropic_key');
+  if (localKey && localKey.trim().startsWith('sk-ant-')) return localKey.trim();
+
+  throw new Error(
+    'No Anthropic API key found. ' +
+    'Add VITE_ANTHROPIC_KEY to Vercel environment variables and redeploy.'
+  );
 }
 
 function extractItemsFromAIResponse(text) {
