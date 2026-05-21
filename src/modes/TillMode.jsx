@@ -125,9 +125,12 @@ export default function TillMode() {
   const handleSendToKitchen = async () => {
     if (cart.length === 0) return;
 
-    // Validate dine-in needs a table; takeaway should have a name
+    // Validate dine-in needs a table; takeaway must have a customer name
     if (!activeOrder && orderType === 'dine-in-pickup' && !pendingTableId) {
       return showToast('Pick a table first', 'error');
+    }
+    if (!activeOrder && orderType === 'takeaway' && !pendingCustomerName.trim()) {
+      return showToast('Enter a customer name for takeaway', 'error');
     }
 
     const sentCart = cart.map(l => ({ ...l, status: 'sent' }));
@@ -182,6 +185,9 @@ export default function TillMode() {
     if (cart.length === 0) return;
     if (!activeOrder && orderType === 'dine-in-pickup' && !pendingTableId) {
       return showToast('Pick a table first', 'error');
+    }
+    if (!activeOrder && orderType === 'takeaway' && !pendingCustomerName.trim()) {
+      return showToast('Enter a customer name for takeaway', 'error');
     }
     const sentCart = cart.map(l => ({ ...l, status: 'sent' }));
     const totals = calcTotals(sentCart);
@@ -399,13 +405,17 @@ export default function TillMode() {
           {orderType === 'takeaway' && (
             <div>
               <label style={{ fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
-                Customer name <span style={{ color: 'var(--text-3)' }}>(recommended)</span>
+                Customer name <span style={{ color: 'var(--red)' }}>*required</span>
               </label>
               <input
                 value={pendingCustomerName}
                 onChange={e => setPendingCustomerName(e.target.value)}
                 placeholder="e.g. Priya, John"
-                style={{ fontSize: 15, padding: '10px 12px' }}
+                style={{
+                  fontSize: 15, padding: '10px 12px',
+                  borderColor: !pendingCustomerName.trim() ? 'var(--red)' : undefined,
+                  outline: !pendingCustomerName.trim() ? '1px solid var(--red)' : undefined
+                }}
               />
             </div>
           )}
