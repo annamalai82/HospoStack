@@ -98,6 +98,19 @@ export default function TillMode() {
   const removeLine = (i) => setCart(c => c.filter((_, j) => j !== i));
   const addLine = (line) => setCart(c => [...c, line]);
 
+  // ── Note changes ─────────────────────────────────────────────────────
+  const updateCartNote = (cartIndex, note) => {
+    setCart(c => c.map((l, i) => i === cartIndex ? { ...l, notes: note } : l));
+  };
+
+  const updateSentNote = async (sentIndex, note) => {
+    if (!activeOrder) return;
+    const items = [...(activeOrder.items || [])];
+    if (sentIndex < 0 || sentIndex >= items.length) return;
+    items[sentIndex] = { ...items[sentIndex], notes: note };
+    await updateOrder(activeOrder.id, { items });
+  };
+
   // ── Modify already-sent items directly on the active order ───────────
   const modifySentItem = async (sentIndex, newQty) => {
     if (!activeOrder) return;
@@ -493,6 +506,8 @@ export default function TillMode() {
           onRemove={removeLine}
           onModifySent={modifySentItem}
           onRemoveSent={removeSentItem}
+          onNoteChange={updateCartNote}
+          onSentNoteChange={updateSentNote}
           header={headerContent}
           footer={footerContent}
         />
