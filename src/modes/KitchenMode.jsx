@@ -192,7 +192,7 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
           </div>
           <div className="kds-primary-label">{primaryLabel}</div>
           <div className="kds-secondary">
-            <span className="kds-order-num">#{orderNumber}</span>
+            {!order.customerName && <span className="kds-order-num">#{orderNumber}</span>}
             <span className={`kds-progress ${doneCount === totalCount ? 'done' : ''}`}>
               {doneCount}/{totalCount}
             </span>

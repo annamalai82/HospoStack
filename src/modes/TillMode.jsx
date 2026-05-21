@@ -566,7 +566,9 @@ function OpenTabsPane({ tabs, tables, activeId, alertMins = 20, onSelect, onPay,
               <button className="tab-main" onClick={() => onSelect(o)}>
                 <div className="tab-head">
                   <span className="tab-label">
-                    {o.tableId ? `T${o.tableNumber || o.tableId.replace('t','')}` : `#${o.id.slice(-4).toUpperCase()}`}
+                    {o.tableId
+                      ? `T${o.tableNumber || o.tableId.replace('t','')}`
+                      : (o.customerName || `#${o.id.slice(-4).toUpperCase()}`)}
                   </span>
                   <span className="tab-status">{statusLabel(o)}</span>
                 </div>
