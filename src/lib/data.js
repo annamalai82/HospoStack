@@ -122,11 +122,31 @@ export function watchOrderById(orderId, cb) {
   });
 }
 
+// Firestore rejects writes containing `undefined`. Cart lines built from menu
+// items that are missing `station` / `course` / `selections` / etc. carry those
+// `undefined` values straight into Firestore and the whole updateDoc throws —
+// which (when uncaught) leaves an orphan order doc with no items attached. This
+// helper deep-strips undefined fields from a value before it goes to Firestore.
+export function stripUndefined(value) {
+  if (value === null) return null;
+  if (Array.isArray(value)) return value.map(stripUndefined);
+  if (value && typeof value === 'object' && !value.toMillis) {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefined(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 export async function createOrder(payload) {
+  const clean = stripUndefined(payload);
   const ref = await addDoc(col('orders'), {
-    ...payload,
+    ...clean,
     status: 'open',
-    items: payload.items || [],
+    items: clean.items || [],
     subtotal: 0, gst: 0, total: 0, paid: 0,
     payments: [],
     openedAt: serverTimestamp()
@@ -135,16 +155,62 @@ export async function createOrder(payload) {
 }
 
 export async function updateOrder(orderId, patch) {
-  await updateDoc(doc(db, 'venues', _venueId, 'orders', orderId), patch);
+  await updateDoc(doc(db, 'venues', _venueId, 'orders', orderId), stripUndefined(patch));
 }
 
 export async function sendOrderToKitchen(orderId, items, totals) {
   await updateDoc(doc(db, 'venues', _venueId, 'orders', orderId), {
-    items,
-    ...totals,
+    items: stripUndefined(items),
+    ...stripUndefined(totals),
     status: 'sent',
     sentAt: serverTimestamp()
   });
+}
+
+/**
+ * Create a new order AND mark it as sent-to-kitchen in a single atomic batch.
+ * Use this for the "new order → send to kitchen" flow so we never get an
+ * orphan order doc when the items-write fails midway. Returns the new orderId.
+ */
+export async function createAndSendOrder(payload, items, totals) {
+  const orderRef = doc(col('orders'));
+  const batch = writeBatch(db);
+  const clean = stripUndefined(payload);
+  batch.set(orderRef, {
+    ...clean,
+    items: stripUndefined(items) || [],
+    ...stripUndefined(totals),
+    paid: 0,
+    payments: [],
+    status: 'sent',
+    openedAt: serverTimestamp(),
+    sentAt: serverTimestamp()
+  });
+  await batch.commit();
+  return orderRef.id;
+}
+
+/**
+ * Clean up orphan orders — those still status='open' with zero items and
+ * older than `olderThanMins`. Marks them as voided so they disappear from
+ * the Open Tabs sidebar without affecting reporting.
+ */
+export async function cleanupOrphanOrders(olderThanMins = 30) {
+  const snap = await getDocs(query(col('orders'), where('status', '==', 'open')));
+  const cutoff = Date.now() - olderThanMins * 60000;
+  const batch = writeBatch(db);
+  let count = 0;
+  snap.docs.forEach(d => {
+    const o = d.data();
+    const items = o.items || [];
+    const openedMs = o.openedAt?.toMillis?.() || 0;
+    if (items.length === 0 && openedMs < cutoff) {
+      batch.update(d.ref, { status: 'voided', voidedAt: serverTimestamp(), voidReason: 'orphan-empty' });
+      count++;
+    }
+  });
+  if (count > 0) await batch.commit();
+  return count;
 }
 
 export async function bumpOrderItem(orderId, itemIndex, newStatus, items) {

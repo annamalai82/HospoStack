@@ -102,9 +102,9 @@ export default function ModifierPicker({ item, onCancel, onConfirm }) {
       name: item.name,
       qty,
       price: unitPrice,           // unit price including modifiers
-      basePrice: item.price,
-      station: item.station,
-      course: item.course,
+      basePrice: item.price ?? 0,
+      station: item.station ?? 'kitchen',
+      course: item.course ?? 'main',
       selections: sel,
       notes: notes.trim(),
       modifiersPriceDelta: priceDelta,

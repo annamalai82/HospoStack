@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   watchTables, watchOpenOrders, updateTableStatus,
-  createOrder, sendOrderToKitchen, settleOrder,
+  createOrder, createAndSendOrder, sendOrderToKitchen, settleOrder,
   upsertCustomer, queueReceiptDelivery, previewVoucherRedemption,
   watchVenue, updateOrder
 } from '../lib/data';
@@ -78,10 +78,19 @@ export default function TillMode() {
       if (found >= 0) {
         const next = [...c]; next[found] = { ...next[found], qty: next[found].qty + 1 }; return next;
       }
+      // Coerce any undefined fields to safe defaults — Firestore rejects
+      // undefined values and silently fails the send-to-kitchen write,
+      // which leaves an orphan empty order in Open Tabs.
       return [...c, {
-        itemId: item.id, name: item.name, qty: 1,
-        price: item.price, station: item.station, course: item.course,
-        notes: '', status: 'pending'
+        itemId: item.id,
+        name: item.name,
+        qty: 1,
+        price: item.price ?? 0,
+        station: item.station ?? 'kitchen',
+        course: item.course ?? 'main',
+        selections: [],
+        notes: '',
+        status: 'pending'
       }];
     });
   };
@@ -123,46 +132,49 @@ export default function TillMode() {
 
     const sentCart = cart.map(l => ({ ...l, status: 'sent' }));
 
-    if (activeOrder) {
-      // Appending to existing order — preserve table/customer info
-      const items = [...(activeOrder.items || []), ...sentCart];
-      const totals = calcTotals(items);
-      await sendOrderToKitchen(activeOrder.id, items, totals);
-      showToast(`+${cart.length} item${cart.length === 1 ? '' : 's'} sent to kitchen`);
-    } else {
-      // New order — attach table info or customer name
-      const totals = calcTotals(sentCart);
-      const isDineIn = orderType === 'dine-in-pickup';
-      const tbl = isDineIn ? tables.find(t => t.id === pendingTableId) : null;
-      const newOrder = {
-        tableId: tbl?.id || null,
-        tableNumber: tbl?.number || null,
-        customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
-        orderType,
-        openedBy: device.user.id,
-        items: []
-      };
-      const orderId = await createOrder(newOrder);
-      await sendOrderToKitchen(orderId, sentCart, totals);
-      // Mark table as ordering
-      if (tbl) await updateTableStatus(tbl.id, 'ordering');
-      // Optimistic local copy so the UI doesn't blank while Firestore catches up
-      setOptimisticOrder({
-        id: orderId,
-        ...newOrder,
-        items: sentCart,
-        ...totals,
-        status: 'sent',
-        openedAt: { toMillis: () => Date.now() },
-        sentAt: { toMillis: () => Date.now() }
-      });
-      setActiveOrderId(orderId);
-      setPendingTableId('');
-      setPendingCustomerName('');
-      const label = tbl ? `Table ${tbl.number}` : (pendingCustomerName.trim() || 'Takeaway');
-      showToast(`${label} sent to kitchen`);
+    try {
+      if (activeOrder) {
+        // Appending to existing order — preserve table/customer info
+        const items = [...(activeOrder.items || []), ...sentCart];
+        const totals = calcTotals(items);
+        await sendOrderToKitchen(activeOrder.id, items, totals);
+        showToast(`+${cart.length} item${cart.length === 1 ? '' : 's'} sent to kitchen`);
+      } else {
+        // New order — atomic create+send so we never leave an orphan empty order
+        const totals = calcTotals(sentCart);
+        const isDineIn = orderType === 'dine-in-pickup';
+        const tbl = isDineIn ? tables.find(t => t.id === pendingTableId) : null;
+        const newOrderMeta = {
+          tableId: tbl?.id || null,
+          tableNumber: tbl?.number || null,
+          customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
+          orderType,
+          openedBy: device.user.id
+        };
+        const orderId = await createAndSendOrder(newOrderMeta, sentCart, totals);
+        // Mark table as ordering
+        if (tbl) await updateTableStatus(tbl.id, 'ordering');
+        // Optimistic local copy so the UI doesn't blank while Firestore catches up
+        setOptimisticOrder({
+          id: orderId,
+          ...newOrderMeta,
+          items: sentCart,
+          ...totals,
+          status: 'sent',
+          openedAt: { toMillis: () => Date.now() },
+          sentAt: { toMillis: () => Date.now() }
+        });
+        setActiveOrderId(orderId);
+        setPendingTableId('');
+        setPendingCustomerName('');
+        const label = tbl ? `Table ${tbl.number}` : (pendingCustomerName.trim() || 'Takeaway');
+        showToast(`${label} sent to kitchen`);
+      }
+      setCart([]);
+    } catch (err) {
+      console.error('Send to kitchen failed:', err);
+      showToast(`Couldn't send to kitchen — ${err?.message || 'try again'}`, 'error');
     }
-    setCart([]);
   };
 
   // ── Send + immediately go to payment (counter / quick service flow) ──
@@ -174,42 +186,43 @@ export default function TillMode() {
     const sentCart = cart.map(l => ({ ...l, status: 'sent' }));
     const totals = calcTotals(sentCart);
 
-    if (activeOrder) {
-      const items = [...(activeOrder.items || []), ...sentCart];
-      const newTotals = calcTotals(items);
-      await sendOrderToKitchen(activeOrder.id, items, newTotals);
-      setCart([]);
-      setShowPay(true);
-    } else {
-      const isDineIn = orderType === 'dine-in-pickup';
-      const tbl = isDineIn ? tables.find(t => t.id === pendingTableId) : null;
-      const orderId = await createOrder({
-        tableId: tbl?.id || null,
-        tableNumber: tbl?.number || null,
-        customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
-        orderType,
-        openedBy: device.user.id,
-        items: []
-      });
-      await sendOrderToKitchen(orderId, sentCart, totals);
-      if (tbl) await updateTableStatus(tbl.id, 'ordering');
-      setOptimisticOrder({
-        id: orderId,
-        tableId: tbl?.id || null,
-        tableNumber: tbl?.number || null,
-        customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
-        orderType,
-        items: sentCart,
-        ...totals,
-        status: 'sent',
-        openedAt: { toMillis: () => Date.now() },
-        sentAt: { toMillis: () => Date.now() }
-      });
-      setActiveOrderId(orderId);
-      setCart([]);
-      setPendingTableId('');
-      setPendingCustomerName('');
-      setShowPay(true);
+    try {
+      if (activeOrder) {
+        const items = [...(activeOrder.items || []), ...sentCart];
+        const newTotals = calcTotals(items);
+        await sendOrderToKitchen(activeOrder.id, items, newTotals);
+        setCart([]);
+        setShowPay(true);
+      } else {
+        const isDineIn = orderType === 'dine-in-pickup';
+        const tbl = isDineIn ? tables.find(t => t.id === pendingTableId) : null;
+        const newOrderMeta = {
+          tableId: tbl?.id || null,
+          tableNumber: tbl?.number || null,
+          customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
+          orderType,
+          openedBy: device.user.id
+        };
+        const orderId = await createAndSendOrder(newOrderMeta, sentCart, totals);
+        if (tbl) await updateTableStatus(tbl.id, 'ordering');
+        setOptimisticOrder({
+          id: orderId,
+          ...newOrderMeta,
+          items: sentCart,
+          ...totals,
+          status: 'sent',
+          openedAt: { toMillis: () => Date.now() },
+          sentAt: { toMillis: () => Date.now() }
+        });
+        setActiveOrderId(orderId);
+        setCart([]);
+        setPendingTableId('');
+        setPendingCustomerName('');
+        setShowPay(true);
+      }
+    } catch (err) {
+      console.error('Send + pay failed:', err);
+      showToast(`Couldn't send to kitchen — ${err?.message || 'try again'}`, 'error');
     }
   };
 
