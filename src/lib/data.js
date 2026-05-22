@@ -289,12 +289,30 @@ export function watchCustomers(cb) {
 // ── Receipt delivery records (Cloud Function logs delivery here) ────────────
 export async function queueReceiptDelivery(orderId, customer) {
   // Cloud Function listens on this collection and sends email/SMS.
-  await addDoc(col('receipt_deliveries'), {
+  // Returns the new delivery doc ID so the UI can watch for status updates.
+  const ref = await addDoc(col('receipt_deliveries'), {
     orderId,
     customer,
     status: 'queued',
     createdAt: serverTimestamp()
   });
+  return ref.id;
+}
+
+// Watch a single receipt_delivery doc for status changes
+export function watchReceiptDelivery(deliveryId, cb) {
+  return onSnapshot(
+    doc(db, 'venues', _venueId, 'receipt_deliveries', deliveryId),
+    snap => { if (snap.exists()) cb({ id: snap.id, ...snap.data() }); }
+  );
+}
+
+// Fetch all receipt deliveries for a given orderId (for Reports)
+export async function getReceiptDeliveriesForOrder(orderId) {
+  const snap = await getDocs(
+    query(col('receipt_deliveries'), where('orderId', '==', orderId))
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 // ── Bookings ───────────────────────────────────────────────────────────────

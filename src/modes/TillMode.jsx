@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   watchTables, watchOpenOrders, updateTableStatus,
   createOrder, createAndSendOrder, sendOrderToKitchen, settleOrder,
-  upsertCustomer, queueReceiptDelivery, previewVoucherRedemption,
+  upsertCustomer, queueReceiptDelivery, watchReceiptDelivery,
+  previewVoucherRedemption,
   watchVenue, updateOrder
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
@@ -282,10 +283,12 @@ export default function TillMode() {
     // 2. Settle the order, attaching customer + payments
     await settleOrder(activeOrder.id, payments, total, customer || null);
 
-    // 3. Queue receipt delivery if customer gave contact details
-    if (customer && (customer.email || customer.phone)) {
+    // 3. Queue receipt delivery if customer gave contact details + opted in
+    let receiptQueued = false;
+    if (customer && (customer.email || customer.phone) && customer.receiptOptIn !== false) {
       try {
         await queueReceiptDelivery(activeOrder.id, customer);
+        receiptQueued = true;
       } catch (e) {
         console.warn('Receipt queue failed', e);
       }
@@ -300,12 +303,14 @@ export default function TillMode() {
     setActiveOrderId(null);
     setShowPay(false);
 
-    // The receipt delivery doc is queued in Firestore so a Cloud Function
-    // can pick it up later. Without that function deployed, nothing actually
-    // sends — but the customer is captured in the marketing DB and we leave
-    // an honest message instead of promising a receipt that won't arrive.
-    if (customer && (customer.email || customer.phone)) {
-      showToast(`Paid $${total.toFixed(2)} · Customer details saved`);
+    if (receiptQueued) {
+      const channels = [
+        customer.email ? '📧 email' : null,
+        customer.phone ? '💬 SMS' : null
+      ].filter(Boolean).join(' + ');
+      showToast(`Paid $${total.toFixed(2)} · Receipt sent via ${channels}`);
+    } else if (customer && (customer.email || customer.phone)) {
+      showToast(`Paid $${total.toFixed(2)} · Customer saved (no receipt sent)`);
     } else {
       showToast(`Paid $${total.toFixed(2)}`);
     }
@@ -661,7 +666,8 @@ function PayScreen({ order, initialPayments = [], onCancel, onVoid, onEditOrder,
   const [customer, setCustomer] = useState({
     name: order.customer?.name || '',
     email: order.customer?.email || '',
-    phone: order.customer?.phone || ''
+    phone: order.customer?.phone || '',
+    receiptOptIn: true
   });
 
   const paid = payments.reduce((s, p) => s + p.amount, 0);
@@ -1171,6 +1177,12 @@ function VoucherRedeemDialog({ balance, orderTotal, onCancel, onApplied }) {
 // ── Customer capture screen ──────────────────────────────────────────────
 function CustomerCaptureScreen({ total, change, customer, onChange, onBack, onSend, onSkip }) {
   const hasContact = customer.email.trim() || customer.phone.trim();
+  const receiptOptIn = customer.receiptOptIn !== false; // default true
+
+  const channels = [
+    customer.email.trim() ? '📧 email' : null,
+    customer.phone.trim() ? '💬 SMS' : null
+  ].filter(Boolean);
 
   return (
     <div className="pay-screen">
@@ -1189,9 +1201,10 @@ function CustomerCaptureScreen({ total, change, customer, onChange, onBack, onSe
 
         <div className="pay-body" style={{ gridTemplateColumns: '1fr', padding: '28px 32px' }}>
           <div style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: 14, marginBottom: 22 }}>
-            Capture the customer's details for marketing and future receipts.<br />
+            Send a digital receipt and save to customer database.
+            <br />
             <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-              Saved to the customer database with marketing opt-in by default.
+              Provide email for a full HTML receipt · mobile for SMS confirmation.
             </span>
           </div>
 
@@ -1227,15 +1240,49 @@ function CustomerCaptureScreen({ total, change, customer, onChange, onBack, onSe
             </div>
           </div>
 
+          {/* Receipt opt-in */}
+          {hasContact && (
+            <div
+              onClick={() => onChange({ ...customer, receiptOptIn: !receiptOptIn })}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+                background: receiptOptIn ? 'var(--green-deep)' : 'var(--surface-2)',
+                border: `1px solid ${receiptOptIn ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                borderRadius: 'var(--radius)', padding: '12px 16px',
+                transition: 'all 120ms', userSelect: 'none'
+              }}
+            >
+              <span style={{
+                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                border: `2px solid ${receiptOptIn ? 'var(--green)' : 'var(--border-strong)'}`,
+                background: receiptOptIn ? 'var(--green)' : 'transparent',
+                display: 'grid', placeItems: 'center', fontSize: 13, color: '#0a1f12', fontWeight: 700
+              }}>
+                {receiptOptIn ? '✓' : ''}
+              </span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: receiptOptIn ? 'var(--green)' : 'var(--text-2)' }}>
+                  {receiptOptIn ? `Send receipt via ${channels.join(' + ')}` : 'Don\'t send receipt'}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
+                  {receiptOptIn
+                    ? 'Tax invoice · customer details saved to database'
+                    : 'Customer details will still be saved for marketing'}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{
             background: 'var(--bg-2)', borderRadius: 8, padding: 12,
-            fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6,
-            marginTop: 4
+            fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6, marginTop: 4
           }}>
-            Provide email <em>or</em> mobile, or both. Total: <b style={{ color: 'var(--brand)' }}>${total.toFixed(2)}</b>.
-            <br />
-            <span style={{ color: 'var(--amber)' }}>Note:</span> Email / SMS receipt delivery requires a Cloud Function (not deployed yet).
-            Customer details are still saved either way.
+            Total: <b style={{ color: 'var(--brand)' }}>${total.toFixed(2)}</b>
+            {hasContact && receiptOptIn && channels.length > 0 && (
+              <span style={{ color: 'var(--green)', marginLeft: 8 }}>
+                · Receipt will be sent to {channels.join(' and ')}
+              </span>
+            )}
           </div>
         </div>
 
@@ -1249,7 +1296,9 @@ function CustomerCaptureScreen({ total, change, customer, onChange, onBack, onSe
               style={{ opacity: hasContact ? 1 : 0.4 }}
               onClick={onSend}
             >
-              Save customer & finish
+              {hasContact && receiptOptIn
+                ? `Send receipt & finish`
+                : 'Save customer & finish'}
             </button>
           </div>
         </div>
