@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   watchCategories, createCategory, updateCategory, deleteCategory,
   watchAllMenuItems, createMenuItem, updateMenuItem, deleteMenuItem,
-  watchModifierGroups
+  watchModifierGroups, resetAndReseedMenu
 } from '../lib/data';
 import Modal from './Modal';
 
@@ -18,6 +18,8 @@ export default function MenuPanel({ initialTab, onToast } = {}) {
   const [filterCat, setFilterCat] = useState('all');
   const [editing, setEditing] = useState(null);
   const [editingCat, setEditingCat] = useState(null);
+  const [reseeding, setReseeding] = useState(false);
+  const [showReseedConfirm, setShowReseedConfirm] = useState(false);
 
   useEffect(() => watchCategories(setCats), []);
   useEffect(() => watchAllMenuItems(setItems), []);
@@ -26,10 +28,53 @@ export default function MenuPanel({ initialTab, onToast } = {}) {
   const catMap = useMemo(() => Object.fromEntries(cats.map(c => [c.id, c])), [cats]);
   const visibleItems = filterCat === 'all' ? items : items.filter(i => i.categoryId === filterCat);
 
+  const handleReseed = async () => {
+    setReseeding(true);
+    setShowReseedConfirm(false);
+    try {
+      await resetAndReseedMenu();
+      onToast?.('✓ Menu reset to full Sizzle N Sambar menu with correct pricing');
+    } catch (e) {
+      onToast?.('Reset failed: ' + e.message);
+    } finally {
+      setReseeding(false);
+    }
+  };
+
   return (
     <>
       <h3>Menu</h3>
       <p className="subtitle">Manage categories, items, prices, and which station each item routes to.</p>
+
+      {/* Reseed banner */}
+      <div style={{
+        background: 'var(--amber-deep)', border: '1px solid rgba(251,191,36,0.3)',
+        borderRadius: 'var(--radius)', padding: '10px 14px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 12, marginBottom: 14, flexWrap: 'wrap'
+      }}>
+        <span style={{ fontSize: 13, color: 'var(--amber)' }}>
+          🍽 Reset menu to full SNS menu with correct per-protein pricing
+        </span>
+        {showReseedConfirm ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowReseedConfirm(false)}>Cancel</button>
+            <button
+              className="btn btn-sm"
+              style={{ fontSize: 12, background: 'var(--red)', color: '#fff' }}
+              disabled={reseeding}
+              onClick={handleReseed}
+            >{reseeding ? 'Resetting…' : '⚠ Yes, reset menu'}</button>
+          </div>
+        ) : (
+          <button
+            className="btn btn-sm"
+            style={{ fontSize: 12, background: 'var(--amber)', color: '#18120e', flexShrink: 0 }}
+            disabled={reseeding}
+            onClick={() => setShowReseedConfirm(true)}
+          >Reset & Reload Menu</button>
+        )}
+      </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
         <button

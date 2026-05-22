@@ -697,7 +697,7 @@ export async function seedIfEmpty() {
     createdAt: serverTimestamp()
   });
 
-  // Users with PINs (4-digit). Default Manager = 1234.
+  // Users
   const users = [
     { id: 'manager', name: 'Default Manager', role: 'manager', pin: '1234', active: true },
     { id: 'gowri', name: 'Gowri Narayanaswamy', role: 'manager', pin: '4321', active: true },
@@ -710,52 +710,246 @@ export async function seedIfEmpty() {
     batch.set(doc(db, 'venues', _venueId, 'users', id), rest);
   });
 
-  // Menu categories
+  // ── Menu categories ────────────────────────────────────────────────────────
   const cats = [
-    { id: 'starters', name: 'Starters', order: 1, color: '#f59e0b' },
-    { id: 'mains', name: 'Mains', order: 2, color: '#ef4444' },
-    { id: 'biryani', name: 'Biryani', order: 3, color: '#8b5cf6' },
-    { id: 'breads', name: 'Breads', order: 4, color: '#10b981' },
-    { id: 'desserts', name: 'Desserts', order: 5, color: '#ec4899' },
-    { id: 'drinks', name: 'Drinks', order: 6, color: '#3b82f6' }
+    { id: 'veg-starters',   name: 'Veg Starters',              order: 1,  color: '#10b981' },
+    { id: 'nonveg-starters',name: 'Non-Veg Starters',          order: 2,  color: '#ef4444' },
+    { id: 'rice-noodles',   name: 'Rice & Noodles',            order: 3,  color: '#f59e0b' },
+    { id: 'idiappam',       name: 'Idiappam (String Hoppers)',  order: 4,  color: '#8b5cf6' },
+    { id: 'rice',           name: 'Rice',                       order: 5,  color: '#f59e0b' },
+    { id: 'veg-mains',      name: 'Veg Mains',                 order: 6,  color: '#10b981' },
+    { id: 'nonveg-mains',   name: 'Non-Veg Mains',             order: 7,  color: '#ef4444' },
+    { id: 'biryani',        name: 'Biryani',                   order: 8,  color: '#8b5cf6' },
+    { id: 'dosai',          name: 'Dosai',                     order: 9,  color: '#ec4899' },
+    { id: 'idli',           name: 'Idli',                      order: 10, color: '#3b82f6' },
+    { id: 'breads',         name: 'Breads',                    order: 11, color: '#6366f1' },
+    { id: 'accompaniments', name: 'Accompaniments',            order: 12, color: '#14b8a6' },
+    { id: 'desserts',       name: 'Desserts',                  order: 13, color: '#ec4899' },
+    { id: 'drinks',         name: 'Drinks',                    order: 14, color: '#3b82f6' }
   ];
   cats.forEach(c => {
     const { id, ...rest } = c;
     batch.set(doc(db, 'venues', _venueId, 'menu_categories', id), { ...rest, active: true });
   });
 
-  // Menu items (sampled from the Sizzle N Sambar reference)
+  // ── Modifier groups ────────────────────────────────────────────────────────
+  // For items where each protein/variant has a DIFFERENT price,
+  // base price = cheapest option (Veg), other options show positive delta.
+  // type: 'single' + required: true forces staff to choose before adding.
+
+  // Fried Rice proteins: Veg $18.90 | Egg $18.90 | Chicken $21.00 | Prawn $23.90
+  const friedRiceProteinId = 'mod-fried-rice-protein';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', friedRiceProteinId), {
+    name: 'Choose Protein',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'fr-veg',     label: 'Veg',     priceDelta: 0.00 },
+      { id: 'fr-egg',     label: 'Egg',     priceDelta: 0.00 },
+      { id: 'fr-chicken', label: 'Chicken', priceDelta: 2.10 },
+      { id: 'fr-prawn',   label: 'Prawn',   priceDelta: 5.00 }
+    ]
+  });
+
+  // Hakka / Schezwan Noodles: Veg $18.90 | Egg $18.90 | Mushroom $18.90 | Chicken $21.00 | Prawn $23.90
+  const noodleProteinId = 'mod-noodle-protein';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', noodleProteinId), {
+    name: 'Choose Protein',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'nd-veg',      label: 'Veg',      priceDelta: 0.00 },
+      { id: 'nd-egg',      label: 'Egg',       priceDelta: 0.00 },
+      { id: 'nd-mushroom', label: 'Mushroom',  priceDelta: 0.00 },
+      { id: 'nd-chicken',  label: 'Chicken',   priceDelta: 2.10 },
+      { id: 'nd-prawn',    label: 'Prawn',     priceDelta: 5.00 }
+    ]
+  });
+
+  // Noodle style: Hakka or Schezwan (no price diff)
+  const noodleStyleId = 'mod-noodle-style';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', noodleStyleId), {
+    name: 'Noodle Style',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'ns-hakka',    label: 'Hakka',    priceDelta: 0 },
+      { id: 'ns-schezwan', label: 'Schezwan', priceDelta: 0 }
+    ]
+  });
+
+  // Idiappam curry pairing (no price diff)
+  const idiappamCurryId = 'mod-idiappam-curry';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', idiappamCurryId), {
+    name: 'Served With',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'ic-coconut', label: 'Coconut Milk', priceDelta: 0 },
+      { id: 'ic-curry',   label: 'Spicy Curry',  priceDelta: 0 }
+    ]
+  });
+
+  // Biryani protein: Veg $19.90 | Chicken $23.90 | Goat $25.90 | Prawn $26.90 | Fish $25.90
+  const biryaniProteinId = 'mod-biryani-protein';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', biryaniProteinId), {
+    name: 'Choose Protein',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'br-veg',     label: 'Veg',     priceDelta: 0.00 },
+      { id: 'br-chicken', label: 'Chicken', priceDelta: 4.00 },
+      { id: 'br-goat',    label: 'Goat',    priceDelta: 6.00 },
+      { id: 'br-prawn',   label: 'Prawn',   priceDelta: 7.00 },
+      { id: 'br-fish',    label: 'Fish',    priceDelta: 6.00 }
+    ]
+  });
+
+  // Dosai type (plain/masala/ghee — base Masala Dosai $15.90, Ghee Roast +$1)
+  const dosaiTypeId = 'mod-dosai-type';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', dosaiTypeId), {
+    name: 'Dosai Type',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'dt-plain',  label: 'Plain',      priceDelta: -2.00 },
+      { id: 'dt-masala', label: 'Masala',     priceDelta: 0.00  },
+      { id: 'dt-ghee',   label: 'Ghee Roast', priceDelta: 1.00  },
+      { id: 'dt-onion',  label: 'Onion',      priceDelta: 0.00  },
+      { id: 'dt-paper',  label: 'Paper Roast',priceDelta: 1.00  }
+    ]
+  });
+
+  // Spice level (optional, no price diff)
+  const spiceId = 'mod-spice';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', spiceId), {
+    name: 'Spice Level',
+    type: 'single',
+    required: false,
+    options: [
+      { id: 'sp-mild',   label: 'Mild',   priceDelta: 0 },
+      { id: 'sp-medium', label: 'Medium', priceDelta: 0 },
+      { id: 'sp-hot',    label: 'Hot',    priceDelta: 0 }
+    ]
+  });
+
+  // Tandoori portion: Half / Full
+  const tandooriPortionId = 'mod-tandoori-portion';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', tandooriPortionId), {
+    name: 'Portion',
+    type: 'single',
+    required: true,
+    options: [
+      { id: 'tp-half', label: 'Half', priceDelta: 0.00 },
+      { id: 'tp-full', label: 'Full', priceDelta: 9.00 }
+    ]
+  });
+
+  // ── Menu items — full Sizzle N Sambar menu ─────────────────────────────────
+  // Modifier group IDs are stored in modifierGroupIds[]; base price = lowest option.
+
+  const mk = (name, categoryId, price, course, station, modifierGroupIds = []) =>
+    ({ name, categoryId, price, course, station, modifierGroupIds, taxPct: 10, active: true });
+
   const items = [
-    // Starters → kitchen
-    { name: 'Gobi 65', categoryId: 'starters', price: 14.90, course: 'starter', station: 'kitchen' },
-    { name: 'Chicken 65', categoryId: 'starters', price: 16.90, course: 'starter', station: 'kitchen' },
-    { name: 'Paneer Tikka', categoryId: 'starters', price: 17.90, course: 'starter', station: 'kitchen' },
-    { name: 'Tandoori Chicken (Half)', categoryId: 'starters', price: 18.90, course: 'starter', station: 'kitchen' },
-    // Mains
-    { name: 'Butter Chicken', categoryId: 'mains', price: 22.90, course: 'main', station: 'kitchen' },
-    { name: 'Goat Curry', categoryId: 'mains', price: 24.90, course: 'main', station: 'kitchen' },
-    { name: 'Palak Paneer', categoryId: 'mains', price: 19.90, course: 'main', station: 'kitchen' },
-    { name: 'Dal Makhani', categoryId: 'mains', price: 17.90, course: 'main', station: 'kitchen' },
-    // Biryani
-    { name: 'Chicken Dum Biryani', categoryId: 'biryani', price: 23.90, course: 'main', station: 'kitchen' },
-    { name: 'Goat Dum Biryani', categoryId: 'biryani', price: 25.90, course: 'main', station: 'kitchen' },
-    { name: 'Veg Biryani', categoryId: 'biryani', price: 19.90, course: 'main', station: 'kitchen' },
-    // Breads
-    { name: 'Butter Naan', categoryId: 'breads', price: 4.50, course: 'main', station: 'kitchen' },
-    { name: 'Garlic Naan', categoryId: 'breads', price: 5.00, course: 'main', station: 'kitchen' },
-    { name: 'Roti', categoryId: 'breads', price: 4.00, course: 'main', station: 'kitchen' },
-    // Desserts
-    { name: 'Gulab Jamun', categoryId: 'desserts', price: 7.50, course: 'dessert', station: 'kitchen' },
-    { name: 'Kulfi', categoryId: 'desserts', price: 7.00, course: 'dessert', station: 'kitchen' },
-    // Drinks → bar
-    { name: 'Mango Lassi', categoryId: 'drinks', price: 6.50, course: 'drink', station: 'bar' },
-    { name: 'Masala Chai', categoryId: 'drinks', price: 4.50, course: 'drink', station: 'bar' },
-    { name: 'Soft Drink', categoryId: 'drinks', price: 4.00, course: 'drink', station: 'bar' },
-    { name: 'Sparkling Water', categoryId: 'drinks', price: 5.00, course: 'drink', station: 'bar' }
+    // ── Veg Starters ───────────────────────────────────────────────────────
+    mk('Gobi 65',                  'veg-starters', 14.90, 'starter', 'kitchen'),
+    mk('Paneer Tikka',             'veg-starters', 17.90, 'starter', 'kitchen'),
+    mk('Veg Manchurian',           'veg-starters', 15.90, 'starter', 'kitchen'),
+    mk('Baby Corn Pepper Fry',     'veg-starters', 14.90, 'starter', 'kitchen'),
+    mk('Samosa (2 pcs)',           'veg-starters', 10.90, 'starter', 'kitchen'),
+    mk('Vegetable Kofta (3 pcs)',  'veg-starters', 13.90, 'starter', 'kitchen'),
+
+    // ── Non-Veg Starters ───────────────────────────────────────────────────
+    mk('Chicken 65',               'nonveg-starters', 16.90, 'starter', 'kitchen', [spiceId]),
+    mk('Chicken Lollipop',         'nonveg-starters', 17.90, 'starter', 'kitchen', [spiceId]),
+    mk('Chicken Wings',            'nonveg-starters', 16.90, 'starter', 'kitchen', [spiceId]),
+    mk('Mutton Boti',              'nonveg-starters', 19.90, 'starter', 'kitchen', [spiceId]),
+    mk('Prawn 65',                 'nonveg-starters', 19.90, 'starter', 'kitchen', [spiceId]),
+    mk('Fish Fry',                 'nonveg-starters', 18.90, 'starter', 'kitchen', [spiceId]),
+    mk('Tandoori Chicken',         'nonveg-starters', 19.90, 'starter', 'kitchen', [tandooriPortionId]),
+
+    // ── Rice & Noodles ─────────────────────────────────────────────────────
+    // Base = Veg price. Protein modifier adds the delta.
+    mk('Fried Rice',               'rice-noodles', 18.90, 'main', 'kitchen', [friedRiceProteinId]),
+    mk('Hakka / Schezwan Noodles', 'rice-noodles', 18.90, 'main', 'kitchen', [noodleStyleId, noodleProteinId]),
+
+    // ── Idiappam (String Hoppers) ───────────────────────────────────────────
+    mk('Idiappam (4 pcs)',         'idiappam', 14.90, 'main', 'kitchen', [idiappamCurryId]),
+    mk('Idiappam Set (Breakfast)', 'idiappam', 18.90, 'main', 'kitchen'),
+
+    // ── Rice ───────────────────────────────────────────────────────────────
+    mk('Plain Basmati Rice',       'rice', 5.00, 'main', 'kitchen'),
+    mk('Jeera Rice',               'rice', 6.00, 'main', 'kitchen'),
+    mk('Ghee Rice',                'rice', 7.00, 'main', 'kitchen'),
+
+    // ── Veg Mains ──────────────────────────────────────────────────────────
+    mk('Dal Makhani',              'veg-mains', 17.90, 'main', 'kitchen'),
+    mk('Palak Paneer',             'veg-mains', 19.90, 'main', 'kitchen'),
+    mk('Paneer Butter Masala',     'veg-mains', 19.90, 'main', 'kitchen'),
+    mk('Veg Korma',                'veg-mains', 18.90, 'main', 'kitchen'),
+    mk('Chana Masala',             'veg-mains', 17.90, 'main', 'kitchen'),
+    mk('Mushroom Masala',          'veg-mains', 18.90, 'main', 'kitchen'),
+    mk('Aloo Gobi',                'veg-mains', 17.90, 'main', 'kitchen'),
+
+    // ── Non-Veg Mains ──────────────────────────────────────────────────────
+    mk('Butter Chicken',           'nonveg-mains', 22.90, 'main', 'kitchen'),
+    mk('Chicken Korma',            'nonveg-mains', 22.90, 'main', 'kitchen'),
+    mk('Chicken Curry',            'nonveg-mains', 22.90, 'main', 'kitchen'),
+    mk('Goat Curry',               'nonveg-mains', 24.90, 'main', 'kitchen'),
+    mk('Goat Pepper Fry',          'nonveg-mains', 25.90, 'main', 'kitchen'),
+    mk('Fish Curry',               'nonveg-mains', 23.90, 'main', 'kitchen'),
+    mk('Prawn Masala',             'nonveg-mains', 25.90, 'main', 'kitchen'),
+    mk('Mutton Bone Marrow',       'nonveg-mains', 26.90, 'main', 'kitchen'),
+
+    // ── Biryani ────────────────────────────────────────────────────────────
+    // Base = Veg $19.90; protein modifier adds delta
+    mk('Dum Biryani',              'biryani', 19.90, 'main', 'kitchen', [biryaniProteinId, spiceId]),
+
+    // ── Dosai ──────────────────────────────────────────────────────────────
+    // Base = Masala $15.90; type modifier adjusts price
+    mk('Dosai',                    'dosai', 15.90, 'main', 'kitchen', [dosaiTypeId]),
+    mk('Rava Dosai',               'dosai', 15.90, 'main', 'kitchen'),
+    mk('Set Dosai (3 pcs)',        'dosai', 15.90, 'main', 'kitchen'),
+
+    // ── Idli ───────────────────────────────────────────────────────────────
+    mk('Idli (2 pcs)',             'idli', 10.90, 'main', 'kitchen'),
+    mk('Idli Sambar',              'idli', 13.90, 'main', 'kitchen'),
+    mk('Mini Idli (12 pcs)',       'idli', 15.90, 'main', 'kitchen'),
+    mk('Mini Idli Sambar',         'idli', 16.90, 'main', 'kitchen'),
+    mk('Idli & Vada Set',          'idli', 15.90, 'main', 'kitchen'),
+
+    // ── Breads ─────────────────────────────────────────────────────────────
+    mk('Butter Naan',              'breads', 4.50, 'main', 'kitchen'),
+    mk('Garlic Naan',              'breads', 5.00, 'main', 'kitchen'),
+    mk('Cheese Naan',              'breads', 6.00, 'main', 'kitchen'),
+    mk('Roti',                     'breads', 4.00, 'main', 'kitchen'),
+    mk('Parotta',                  'breads', 4.50, 'main', 'kitchen'),
+
+    // ── Accompaniments ─────────────────────────────────────────────────────
+    mk('Mint Chutney',             'accompaniments', 4.00, 'main', 'kitchen'),
+    mk('Mixed Pickle',             'accompaniments', 4.00, 'main', 'kitchen'),
+    mk('Raita',                    'accompaniments', 4.50, 'main', 'kitchen'),
+    mk('Papadum (3 pcs)',          'accompaniments', 3.50, 'main', 'kitchen'),
+
+    // ── Desserts ───────────────────────────────────────────────────────────
+    mk('Gulab Jamun (2 pcs)',      'desserts', 7.50, 'dessert', 'kitchen'),
+    mk('Kulfi',                    'desserts', 7.00, 'dessert', 'kitchen'),
+    mk('Gajar Halwa',              'desserts', 7.50, 'dessert', 'kitchen'),
+
+    // ── Drinks ─────────────────────────────────────────────────────────────
+    mk('Mango Lassi',              'drinks', 6.50, 'drink', 'bar'),
+    mk('Sweet Lassi',              'drinks', 6.00, 'drink', 'bar'),
+    mk('Masala Chai',              'drinks', 4.50, 'drink', 'bar'),
+    mk('Filter Coffee',            'drinks', 4.50, 'drink', 'bar'),
+    mk('Soft Drink (Can)',         'drinks', 4.00, 'drink', 'bar'),
+    mk('Sparkling Water',          'drinks', 5.00, 'drink', 'bar'),
+    mk('Still Water',              'drinks', 3.00, 'drink', 'bar')
   ];
+
   items.forEach(it => {
     const ref = doc(col('menu_items'));
-    batch.set(ref, { ...it, taxPct: 10, active: true });
+    batch.set(ref, it);
   });
 
   // Tables
@@ -767,6 +961,205 @@ export async function seedIfEmpty() {
       status: 'free'
     });
   }
+
+  await batch.commit();
+  return true;
+}
+
+// ── Reset & re-seed (Manager Hub utility — wipes menu + modifiers, re-seeds) ─
+export async function resetAndReseedMenu() {
+  // Delete existing menu items, categories, modifier groups
+  const [itemsSnap, catsSnap, modsSnap] = await Promise.all([
+    getDocs(col('menu_items')),
+    getDocs(col('menu_categories')),
+    getDocs(col('modifier_groups'))
+  ]);
+
+  const CHUNK = 400;
+  const allDocs = [...itemsSnap.docs, ...catsSnap.docs, ...modsSnap.docs];
+  for (let i = 0; i < allDocs.length; i += CHUNK) {
+    const b = writeBatch(db);
+    allDocs.slice(i, i + CHUNK).forEach(d => b.delete(d.ref));
+    await b.commit();
+  }
+
+  // Re-run just the menu portion of the seed
+  // (venue + users + tables already exist — skip those)
+  const batch = writeBatch(db);
+
+  const cats = [
+    { id: 'veg-starters',   name: 'Veg Starters',              order: 1,  color: '#10b981' },
+    { id: 'nonveg-starters',name: 'Non-Veg Starters',          order: 2,  color: '#ef4444' },
+    { id: 'rice-noodles',   name: 'Rice & Noodles',            order: 3,  color: '#f59e0b' },
+    { id: 'idiappam',       name: 'Idiappam (String Hoppers)',  order: 4,  color: '#8b5cf6' },
+    { id: 'rice',           name: 'Rice',                       order: 5,  color: '#f59e0b' },
+    { id: 'veg-mains',      name: 'Veg Mains',                 order: 6,  color: '#10b981' },
+    { id: 'nonveg-mains',   name: 'Non-Veg Mains',             order: 7,  color: '#ef4444' },
+    { id: 'biryani',        name: 'Biryani',                   order: 8,  color: '#8b5cf6' },
+    { id: 'dosai',          name: 'Dosai',                     order: 9,  color: '#ec4899' },
+    { id: 'idli',           name: 'Idli',                      order: 10, color: '#3b82f6' },
+    { id: 'breads',         name: 'Breads',                    order: 11, color: '#6366f1' },
+    { id: 'accompaniments', name: 'Accompaniments',            order: 12, color: '#14b8a6' },
+    { id: 'desserts',       name: 'Desserts',                  order: 13, color: '#ec4899' },
+    { id: 'drinks',         name: 'Drinks',                    order: 14, color: '#3b82f6' }
+  ];
+  cats.forEach(c => {
+    const { id, ...rest } = c;
+    batch.set(doc(db, 'venues', _venueId, 'menu_categories', id), { ...rest, active: true });
+  });
+
+  const friedRiceProteinId = 'mod-fried-rice-protein';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', friedRiceProteinId), {
+    name: 'Choose Protein',
+    type: 'single', required: true,
+    options: [
+      { id: 'fr-veg', label: 'Veg', priceDelta: 0.00 },
+      { id: 'fr-egg', label: 'Egg', priceDelta: 0.00 },
+      { id: 'fr-chicken', label: 'Chicken', priceDelta: 2.10 },
+      { id: 'fr-prawn', label: 'Prawn', priceDelta: 5.00 }
+    ]
+  });
+  const noodleProteinId = 'mod-noodle-protein';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', noodleProteinId), {
+    name: 'Choose Protein',
+    type: 'single', required: true,
+    options: [
+      { id: 'nd-veg', label: 'Veg', priceDelta: 0.00 },
+      { id: 'nd-egg', label: 'Egg', priceDelta: 0.00 },
+      { id: 'nd-mushroom', label: 'Mushroom', priceDelta: 0.00 },
+      { id: 'nd-chicken', label: 'Chicken', priceDelta: 2.10 },
+      { id: 'nd-prawn', label: 'Prawn', priceDelta: 5.00 }
+    ]
+  });
+  const noodleStyleId = 'mod-noodle-style';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', noodleStyleId), {
+    name: 'Noodle Style', type: 'single', required: true,
+    options: [
+      { id: 'ns-hakka', label: 'Hakka', priceDelta: 0 },
+      { id: 'ns-schezwan', label: 'Schezwan', priceDelta: 0 }
+    ]
+  });
+  const idiappamCurryId = 'mod-idiappam-curry';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', idiappamCurryId), {
+    name: 'Served With', type: 'single', required: true,
+    options: [
+      { id: 'ic-coconut', label: 'Coconut Milk', priceDelta: 0 },
+      { id: 'ic-curry', label: 'Spicy Curry', priceDelta: 0 }
+    ]
+  });
+  const biryaniProteinId = 'mod-biryani-protein';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', biryaniProteinId), {
+    name: 'Choose Protein', type: 'single', required: true,
+    options: [
+      { id: 'br-veg', label: 'Veg', priceDelta: 0.00 },
+      { id: 'br-chicken', label: 'Chicken', priceDelta: 4.00 },
+      { id: 'br-goat', label: 'Goat', priceDelta: 6.00 },
+      { id: 'br-prawn', label: 'Prawn', priceDelta: 7.00 },
+      { id: 'br-fish', label: 'Fish', priceDelta: 6.00 }
+    ]
+  });
+  const dosaiTypeId = 'mod-dosai-type';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', dosaiTypeId), {
+    name: 'Dosai Type', type: 'single', required: true,
+    options: [
+      { id: 'dt-plain', label: 'Plain', priceDelta: -2.00 },
+      { id: 'dt-masala', label: 'Masala', priceDelta: 0.00 },
+      { id: 'dt-ghee', label: 'Ghee Roast', priceDelta: 1.00 },
+      { id: 'dt-onion', label: 'Onion', priceDelta: 0.00 },
+      { id: 'dt-paper', label: 'Paper Roast', priceDelta: 1.00 }
+    ]
+  });
+  const spiceId = 'mod-spice';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', spiceId), {
+    name: 'Spice Level', type: 'single', required: false,
+    options: [
+      { id: 'sp-mild', label: 'Mild', priceDelta: 0 },
+      { id: 'sp-medium', label: 'Medium', priceDelta: 0 },
+      { id: 'sp-hot', label: 'Hot', priceDelta: 0 }
+    ]
+  });
+  const tandooriPortionId = 'mod-tandoori-portion';
+  batch.set(doc(db, 'venues', _venueId, 'modifier_groups', tandooriPortionId), {
+    name: 'Portion', type: 'single', required: true,
+    options: [
+      { id: 'tp-half', label: 'Half', priceDelta: 0.00 },
+      { id: 'tp-full', label: 'Full', priceDelta: 9.00 }
+    ]
+  });
+
+  const mk = (name, categoryId, price, course, station, modifierGroupIds = []) =>
+    ({ name, categoryId, price, course, station, modifierGroupIds, taxPct: 10, active: true });
+
+  const items = [
+    mk('Gobi 65', 'veg-starters', 14.90, 'starter', 'kitchen'),
+    mk('Paneer Tikka', 'veg-starters', 17.90, 'starter', 'kitchen'),
+    mk('Veg Manchurian', 'veg-starters', 15.90, 'starter', 'kitchen'),
+    mk('Baby Corn Pepper Fry', 'veg-starters', 14.90, 'starter', 'kitchen'),
+    mk('Samosa (2 pcs)', 'veg-starters', 10.90, 'starter', 'kitchen'),
+    mk('Vegetable Kofta (3 pcs)', 'veg-starters', 13.90, 'starter', 'kitchen'),
+    mk('Chicken 65', 'nonveg-starters', 16.90, 'starter', 'kitchen', [spiceId]),
+    mk('Chicken Lollipop', 'nonveg-starters', 17.90, 'starter', 'kitchen', [spiceId]),
+    mk('Chicken Wings', 'nonveg-starters', 16.90, 'starter', 'kitchen', [spiceId]),
+    mk('Mutton Boti', 'nonveg-starters', 19.90, 'starter', 'kitchen', [spiceId]),
+    mk('Prawn 65', 'nonveg-starters', 19.90, 'starter', 'kitchen', [spiceId]),
+    mk('Fish Fry', 'nonveg-starters', 18.90, 'starter', 'kitchen', [spiceId]),
+    mk('Tandoori Chicken', 'nonveg-starters', 19.90, 'starter', 'kitchen', [tandooriPortionId]),
+    mk('Fried Rice', 'rice-noodles', 18.90, 'main', 'kitchen', [friedRiceProteinId]),
+    mk('Hakka / Schezwan Noodles', 'rice-noodles', 18.90, 'main', 'kitchen', [noodleStyleId, noodleProteinId]),
+    mk('Idiappam (4 pcs)', 'idiappam', 14.90, 'main', 'kitchen', [idiappamCurryId]),
+    mk('Idiappam Set (Breakfast)', 'idiappam', 18.90, 'main', 'kitchen'),
+    mk('Plain Basmati Rice', 'rice', 5.00, 'main', 'kitchen'),
+    mk('Jeera Rice', 'rice', 6.00, 'main', 'kitchen'),
+    mk('Ghee Rice', 'rice', 7.00, 'main', 'kitchen'),
+    mk('Dal Makhani', 'veg-mains', 17.90, 'main', 'kitchen'),
+    mk('Palak Paneer', 'veg-mains', 19.90, 'main', 'kitchen'),
+    mk('Paneer Butter Masala', 'veg-mains', 19.90, 'main', 'kitchen'),
+    mk('Veg Korma', 'veg-mains', 18.90, 'main', 'kitchen'),
+    mk('Chana Masala', 'veg-mains', 17.90, 'main', 'kitchen'),
+    mk('Mushroom Masala', 'veg-mains', 18.90, 'main', 'kitchen'),
+    mk('Aloo Gobi', 'veg-mains', 17.90, 'main', 'kitchen'),
+    mk('Butter Chicken', 'nonveg-mains', 22.90, 'main', 'kitchen'),
+    mk('Chicken Korma', 'nonveg-mains', 22.90, 'main', 'kitchen'),
+    mk('Chicken Curry', 'nonveg-mains', 22.90, 'main', 'kitchen'),
+    mk('Goat Curry', 'nonveg-mains', 24.90, 'main', 'kitchen'),
+    mk('Goat Pepper Fry', 'nonveg-mains', 25.90, 'main', 'kitchen'),
+    mk('Fish Curry', 'nonveg-mains', 23.90, 'main', 'kitchen'),
+    mk('Prawn Masala', 'nonveg-mains', 25.90, 'main', 'kitchen'),
+    mk('Mutton Bone Marrow', 'nonveg-mains', 26.90, 'main', 'kitchen'),
+    mk('Dum Biryani', 'biryani', 19.90, 'main', 'kitchen', [biryaniProteinId, spiceId]),
+    mk('Dosai', 'dosai', 15.90, 'main', 'kitchen', [dosaiTypeId]),
+    mk('Rava Dosai', 'dosai', 15.90, 'main', 'kitchen'),
+    mk('Set Dosai (3 pcs)', 'dosai', 15.90, 'main', 'kitchen'),
+    mk('Idli (2 pcs)', 'idli', 10.90, 'main', 'kitchen'),
+    mk('Idli Sambar', 'idli', 13.90, 'main', 'kitchen'),
+    mk('Mini Idli (12 pcs)', 'idli', 15.90, 'main', 'kitchen'),
+    mk('Mini Idli Sambar', 'idli', 16.90, 'main', 'kitchen'),
+    mk('Idli & Vada Set', 'idli', 15.90, 'main', 'kitchen'),
+    mk('Butter Naan', 'breads', 4.50, 'main', 'kitchen'),
+    mk('Garlic Naan', 'breads', 5.00, 'main', 'kitchen'),
+    mk('Cheese Naan', 'breads', 6.00, 'main', 'kitchen'),
+    mk('Roti', 'breads', 4.00, 'main', 'kitchen'),
+    mk('Parotta', 'breads', 4.50, 'main', 'kitchen'),
+    mk('Mint Chutney', 'accompaniments', 4.00, 'main', 'kitchen'),
+    mk('Mixed Pickle', 'accompaniments', 4.00, 'main', 'kitchen'),
+    mk('Raita', 'accompaniments', 4.50, 'main', 'kitchen'),
+    mk('Papadum (3 pcs)', 'accompaniments', 3.50, 'main', 'kitchen'),
+    mk('Gulab Jamun (2 pcs)', 'desserts', 7.50, 'dessert', 'kitchen'),
+    mk('Kulfi', 'desserts', 7.00, 'dessert', 'kitchen'),
+    mk('Gajar Halwa', 'desserts', 7.50, 'dessert', 'kitchen'),
+    mk('Mango Lassi', 'drinks', 6.50, 'drink', 'bar'),
+    mk('Sweet Lassi', 'drinks', 6.00, 'drink', 'bar'),
+    mk('Masala Chai', 'drinks', 4.50, 'drink', 'bar'),
+    mk('Filter Coffee', 'drinks', 4.50, 'drink', 'bar'),
+    mk('Soft Drink (Can)', 'drinks', 4.00, 'drink', 'bar'),
+    mk('Sparkling Water', 'drinks', 5.00, 'drink', 'bar'),
+    mk('Still Water', 'drinks', 3.00, 'drink', 'bar')
+  ];
+
+  items.forEach(it => {
+    const ref = doc(col('menu_items'));
+    batch.set(ref, it);
+  });
 
   await batch.commit();
   return true;
