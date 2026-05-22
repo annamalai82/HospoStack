@@ -6,3 +6,11 @@ dist
 .env
 .env.local
 .firebase
+
+# Capacitor generated platforms — rebuild with `npx cap add android`
+android/
+electron/
+
+# Android signing key — NEVER commit
+*.jks
+android/key.properties

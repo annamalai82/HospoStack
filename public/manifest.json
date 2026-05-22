@@ -1,0 +1,24 @@
+{
+  "name": "HospoStack POS",
+  "short_name": "HospoStack",
+  "description": "Restaurant point-of-sale system",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Kitchen Display",
+      "short_name": "KOT",
+      "description": "Jump to kitchen order display",
+      "url": "/?mode=kitchen",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

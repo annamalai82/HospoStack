@@ -4,6 +4,7 @@ import {
   extendOrderWait, watchVenue, updateVenue, watchTables
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
+import { sendKOTNotification } from '../lib/native';
 
 const STATIONS = [
   { id: 'all', label: 'All' },
@@ -150,6 +151,9 @@ export default function KitchenMode() {
       // Play sound — use type of first alert (new takes priority)
       const type = newAlerts.some(a => a.type === 'new') ? 'new' : 'modified';
       playAlertSound(type);
+
+      // Android background notification (no-op if app is foreground / web)
+      sendKOTNotification({ type, count: newAlerts.filter(a => a.type === 'new').length });
 
       // Flash the affected tickets
       const ids = new Set(newAlerts.map(a => a.id));
