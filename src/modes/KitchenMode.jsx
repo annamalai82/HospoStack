@@ -1,9 +1,63 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   watchKitchenOrders, bumpOrderItem, updateOrder,
   extendOrderWait, watchVenue, updateVenue, watchTables
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
+
+const STATIONS = [
+  { id: 'all', label: 'All' },
+  { id: 'kitchen', label: 'Kitchen' },
+  { id: 'bar', label: 'Bar' }
+];
+
+const DEFAULT_WARN_MINS  = 8;
+const DEFAULT_ALERT_MINS = 20;
+const EXTEND_MINS = 5;
+
+/* ── Alert sound synthesised via Web Audio API (no file needed) ─────────── */
+function playAlertSound(type = 'new') {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    if (type === 'new') {
+      // Two rising tones — unmistakable "new order" ping
+      [[0, 880], [0.15, 1100]].forEach(([offset, freq]) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + offset);
+        gain.gain.setValueAtTime(0.5, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.35);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.35);
+      });
+    } else {
+      // Single lower tone — "order modified"
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(660, now);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.start(now);
+      osc.stop(now + 0.4);
+    }
+    // Auto-close context after sound finishes
+    setTimeout(() => ctx.close(), 800);
+  } catch (_) { /* audio not available */ }
+}
+
+/* Build a fingerprint for an order so we can detect modifications ────────── */
+function orderFingerprint(order) {
+  return JSON.stringify({
+    items: (order.items || []).map(i => ({ name: i.name, qty: i.qty, notes: i.notes, selections: i.selections })),
+    status: order.status,
+  });
+}
 
 const STATIONS = [
   { id: 'all', label: 'All' },
@@ -26,6 +80,11 @@ export default function KitchenMode() {
   const [collapsed, setCollapsed] = useState({});
   // Track which orderIds we've seen so new ones default to expanded
   const seenIds = useRef(new Set());
+
+  // Alert system: track fingerprints to detect modifications
+  const fingerprintRef = useRef({});         // orderId -> last fingerprint
+  const [alertQueue, setAlertQueue] = useState([]); // { id, type: 'new'|'modified' }
+  const [flashIds, setFlashIds] = useState(new Set()); // orderIds currently flashing
 
   const venueId = device?.venueId;
   useEffect(() => { if (!venueId) return; return watchKitchenOrders(setOrders); }, [venueId]);
@@ -69,6 +128,48 @@ export default function KitchenMode() {
     });
   }, [tickets]);
 
+  // ── Alert detection: new orders + modifications ──────────────────────────
+  const isFirstLoad = useRef(true);
+  useEffect(() => {
+    // Skip the very first snapshot (page load) — no alerts for existing tickets
+    if (isFirstLoad.current) {
+      tickets.forEach(t => {
+        fingerprintRef.current[t.order.id] = orderFingerprint(t.order);
+      });
+      isFirstLoad.current = false;
+      return;
+    }
+
+    const newAlerts = [];
+    tickets.forEach(t => {
+      const id = t.order.id;
+      const fp = orderFingerprint(t.order);
+      const prevFp = fingerprintRef.current[id];
+
+      if (!prevFp) {
+        // Brand new order
+        newAlerts.push({ id, type: 'new' });
+      } else if (prevFp !== fp) {
+        // Existing order was modified
+        newAlerts.push({ id, type: 'modified' });
+      }
+      fingerprintRef.current[id] = fp;
+    });
+
+    if (newAlerts.length > 0) {
+      // Play sound — use type of first alert (new takes priority)
+      const type = newAlerts.some(a => a.type === 'new') ? 'new' : 'modified';
+      playAlertSound(type);
+
+      // Flash the affected tickets
+      const ids = new Set(newAlerts.map(a => a.id));
+      setFlashIds(ids);
+      setTimeout(() => setFlashIds(new Set()), 2500);
+
+      setAlertQueue(prev => [...prev, ...newAlerts]);
+    }
+  }, [tickets]);
+
   const toggleCollapse   = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
   const collapseAll      = () => setCollapsed(Object.fromEntries(tickets.map(t => [t.order.id, true])));
   const expandAll        = () => setCollapsed(Object.fromEntries(tickets.map(t => [t.order.id, false])));
@@ -83,8 +184,28 @@ export default function KitchenMode() {
 
   const allCollapsed = tickets.length > 0 && tickets.every(t => collapsed[t.order.id]);
 
+  // Dismiss all alerts
+  const dismissAlerts = () => setAlertQueue([]);
+
   return (
     <div className="kds">
+      {/* ── Alert banner ── */}
+      {alertQueue.length > 0 && (
+        <div className="kds-alert-banner" onClick={dismissAlerts}>
+          <span className="kds-alert-icon">🔔</span>
+          <span className="kds-alert-text">
+            {alertQueue.filter(a => a.type === 'new').length > 0 && (
+              <b>{alertQueue.filter(a => a.type === 'new').length} new order{alertQueue.filter(a => a.type === 'new').length !== 1 ? 's' : ''}</b>
+            )}
+            {alertQueue.filter(a => a.type === 'new').length > 0 && alertQueue.filter(a => a.type === 'modified').length > 0 && ' · '}
+            {alertQueue.filter(a => a.type === 'modified').length > 0 && (
+              <span>{alertQueue.filter(a => a.type === 'modified').length} order{alertQueue.filter(a => a.type === 'modified').length !== 1 ? 's' : ''} updated</span>
+            )}
+          </span>
+          <span className="kds-alert-dismiss">Tap to dismiss ×</span>
+        </div>
+      )}
+
       <div className="kds-toolbar">
         <div className="kds-filter">
           {STATIONS.map(s => (
@@ -136,6 +257,7 @@ export default function KitchenMode() {
               collapsed={!!collapsed[t.order.id]}
               onToggleCollapse={() => toggleCollapse(t.order.id)}
               tables={tables}
+              flashing={flashIds.has(t.order.id)}
             />
           ))}
         </div>
@@ -157,7 +279,7 @@ export default function KitchenMode() {
 }
 
 /* ── Ticket ──────────────────────────────────────────────────────────── */
-function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapsed, onToggleCollapse, tables }) {
+function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapsed, onToggleCollapse, tables, flashing }) {
   // Own 1-second interval so the clock actually ticks every second
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -221,7 +343,7 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
   const typeBadge = isDineIn ? 'DINE-IN' : 'TAKEAWAY';
 
   return (
-    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'}`}>
+    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'} ${flashing ? 'kds-ticket--flash' : ''}`}>
 
       {/* ── Header ── */}
       <button className="kds-ticket-head" onClick={onToggleCollapse}>

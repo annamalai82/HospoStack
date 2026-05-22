@@ -41,6 +41,145 @@
   --bar:          52px; /* topbar height */
 }
 
+/* ── Light theme ────────────────────────────────────────────────────────── */
+[data-theme='light'] {
+  --bg:           #f5f5f0;
+  --bg-2:         #eceae4;
+  --surface:      #ffffff;
+  --surface-2:    #f0ede8;
+  --surface-3:    #e8e5e0;
+  --border:       #d8d4cc;
+  --border-strong:#c0bbb0;
+  --text:         #1a1612;
+  --text-2:       #5a5650;
+  --text-3:       #8a8680;
+  --brand:        #c44a1a;
+  --brand-2:      #ff7a45;
+  --brand-deep:   #ffddd0;
+  --green:        #16a34a;
+  --green-deep:   #dcfce7;
+  --amber:        #d97706;
+  --amber-deep:   #fef3c7;
+  --red:          #dc2626;
+  --red-deep:     #fee2e2;
+  --blue:         #2563eb;
+  --blue-deep:    #dbeafe;
+  --violet:       #7c3aed;
+  --shadow:       0 1px 0 rgba(0,0,0,0.04) inset, 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-lg:    0 1px 0 rgba(0,0,0,0.04) inset, 0 8px 24px rgba(0,0,0,0.12);
+}
+[data-theme='light'] .topbar {
+  background: rgba(245,245,240,0.94);
+}
+[data-theme='light'] .app.app--with-bg {
+  background: radial-gradient(1200px 600px at 80% -10%, rgba(196,74,26,0.06), transparent 60%), var(--bg);
+}
+
+/* ── Cinema theme (deep dim, easy on kitchen eyes at night) ─────────────── */
+[data-theme='cinema'] {
+  --bg:           #060608;
+  --bg-2:         #0a0a0e;
+  --surface:      #0e0e14;
+  --surface-2:    #13131a;
+  --surface-3:    #18181f;
+  --border:       #1e1e28;
+  --border-strong:#28283a;
+  --text:         #c8c8d8;
+  --text-2:       #7878a0;
+  --text-3:       #4a4a66;
+  --brand:        #ff6030;
+  --brand-2:      #ff8a60;
+  --brand-deep:   #2a1008;
+  --green:        #3acc70;
+  --green-deep:   #071a10;
+  --amber:        #f0a020;
+  --amber-deep:   #2a1a04;
+  --red:          #e05050;
+  --red-deep:     #2a0808;
+  --blue:         #4080e0;
+  --blue-deep:    #081428;
+  --violet:       #8060d0;
+  --shadow:       0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.6);
+  --shadow-lg:    0 1px 0 rgba(255,255,255,0.02) inset, 0 24px 60px rgba(0,0,0,0.8);
+}
+[data-theme='cinema'] .topbar {
+  background: rgba(6,6,8,0.96);
+}
+[data-theme='cinema'] .app.app--with-bg {
+  background: var(--bg);
+}
+
+/* ── Theme dropdown ─────────────────────────────────────────────────────── */
+.theme-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 200;
+  animation: fadeIn 120ms ease;
+}
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text-2);
+  text-align: left;
+  transition: background 80ms;
+}
+.theme-option:hover { background: var(--surface-3); color: var(--text); }
+.theme-option.active { color: var(--text); font-weight: 600; }
+
+/* ── KDS alert banner ───────────────────────────────────────────────────── */
+.kds-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--brand);
+  color: #18120e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  animation: slideDown 200ms ease;
+}
+.kds-alert-icon { font-size: 18px; flex-shrink: 0; }
+.kds-alert-text { flex: 1; }
+.kds-alert-dismiss {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+/* ── KDS ticket flash animation ─────────────────────────────────────────── */
+@keyframes kdsFlash {
+  0%   { box-shadow: 0 0 0 3px var(--brand), var(--shadow); }
+  35%  { box-shadow: 0 0 0 6px var(--brand), var(--shadow); }
+  70%  { box-shadow: 0 0 0 3px var(--brand), var(--shadow); }
+  100% { box-shadow: 0 0 0 0 transparent, var(--shadow); }
+}
+.kds-ticket--flash {
+  animation: kdsFlash 2.5s ease forwards;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Reset ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }

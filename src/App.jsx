@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DeviceProvider, useDevice } from './context/DeviceContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ConfigScreen from './pages/ConfigScreen';
 import PinScreen from './pages/PinScreen';
 import TopBar from './components/TopBar';
@@ -117,8 +118,10 @@ function Step({ n, title, children }) {
 
 export default function App() {
   return (
-    <DeviceProvider>
-      <Shell />
-    </DeviceProvider>
+    <ThemeProvider>
+      <DeviceProvider>
+        <Shell />
+      </DeviceProvider>
+    </ThemeProvider>
   );
 }
