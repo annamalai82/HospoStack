@@ -673,6 +673,41 @@ export async function updateVenue(patch) {
   await updateDoc(venueRef(), patch);
 }
 
+// Update full venue details (name, abn, gstPct, timezone, phone, address)
+export async function updateVenueDetails(venueId, patch) {
+  await updateDoc(doc(db, 'venues', venueId), patch);
+}
+
+// Delete a venue and ALL its sub-collections (menu, orders, tables, users…)
+// WARNING: irreversible. Sub-collections must be deleted manually in batches
+// since Firestore doesn't cascade-delete sub-collections.
+export async function deleteVenue(venueId) {
+  const SUB = [
+    'menu_items', 'menu_categories', 'modifier_groups',
+    'tables', 'users', 'orders', 'customers',
+    'bookings', 'vouchers', 'sessions',
+    'receipt_deliveries'
+  ];
+
+  const CHUNK = 400;
+  for (const sub of SUB) {
+    let hasMore = true;
+    while (hasMore) {
+      const snap = await getDocs(collection(db, 'venues', venueId, sub));
+      if (snap.empty) { hasMore = false; break; }
+      for (let i = 0; i < snap.docs.length; i += CHUNK) {
+        const b = writeBatch(db);
+        snap.docs.slice(i, i + CHUNK).forEach(d => b.delete(d.ref));
+        await b.commit();
+      }
+      if (snap.docs.length < CHUNK) hasMore = false;
+    }
+  }
+
+  // Finally delete the venue doc itself
+  await deleteDoc(doc(db, 'venues', venueId));
+}
+
 // Watch venue for real-time settings (used by KDS, Floor, Till for threshold)
 export function watchVenue(cb) {
   return onSnapshot(venueRef(), s => {

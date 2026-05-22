@@ -1,14 +1,23 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../lib/firebase';
-import { collection, onSnapshot, query, where, getDocs, writeBatch, doc, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, writeBatch, doc, addDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useDevice } from '../context/DeviceContext';
-import { watchVenues, setVenueId } from '../lib/data';
+import { watchVenues, setVenueId, updateVenueDetails, deleteVenue } from '../lib/data';
 
 export default function GroupAdminPanel({ onToast }) {
   const { device, switchVenue } = useDevice();
   const [venues, setVenues] = useState([]);
-  const [venueStats, setVenueStats] = useState({}); // venueId → { todaySales, openOrders, openTabs, overdue, ... }
+  const [venueStats, setVenueStats] = useState({});
   const [tick, setTick] = useState(0);
+
+  // Venue management state
+  const [editingVenue, setEditingVenue]   = useState(null); // venue obj | 'new'
+  const [deletingVenue, setDeletingVenue] = useState(null); // venue obj
+  const [venueForm, setVenueForm]         = useState({ name: '', abn: '', timezone: 'Australia/Perth', phone: '', address: '' });
+  const [venueFormBusy, setVenueFormBusy] = useState(false);
+  const [venueFormErr, setVenueFormErr]   = useState('');
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleting, setDeleting]           = useState(false);
 
   useEffect(() => watchVenues(setVenues), []);
   useEffect(() => {
@@ -61,6 +70,58 @@ export default function GroupAdminPanel({ onToast }) {
     }), { sales: 0, orders: 0, openTables: 0, kitchenTickets: 0, overdue: 0 });
   }, [venueStats]);
 
+  const openEdit = (venue) => {
+    setVenueForm({ name: venue.name || '', abn: venue.abn || '', timezone: venue.timezone || 'Australia/Perth', phone: venue.phone || '', address: venue.address || '' });
+    setVenueFormErr('');
+    setEditingVenue(venue);
+  };
+  const openNew = () => {
+    setVenueForm({ name: '', abn: '', timezone: 'Australia/Perth', phone: '', address: '' });
+    setVenueFormErr('');
+    setEditingVenue('new');
+  };
+  const saveVenue = async () => {
+    if (!venueForm.name.trim()) { setVenueFormErr('Venue name is required'); return; }
+    setVenueFormErr('');
+    setVenueFormBusy(true);
+    try {
+      if (editingVenue === 'new') {
+        const id = venueForm.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        await setDoc(doc(db, 'venues', id), {
+          name: venueForm.name.trim(), abn: venueForm.abn.trim(),
+          timezone: venueForm.timezone, phone: venueForm.phone.trim(),
+          address: venueForm.address.trim(), currency: 'AUD',
+          gstPct: 10, createdAt: serverTimestamp()
+        });
+        await setDoc(doc(db, 'venues', id, 'users', 'manager'), {
+          name: 'Default Manager', role: 'manager', pin: '1234', active: true
+        });
+        onToast?.(`✓ "${venueForm.name.trim()}" created — default PIN 1234`);
+      } else {
+        await updateVenueDetails(editingVenue.id, {
+          name: venueForm.name.trim(), abn: venueForm.abn.trim(),
+          timezone: venueForm.timezone, phone: venueForm.phone.trim(),
+          address: venueForm.address.trim()
+        });
+        onToast?.(`✓ "${venueForm.name.trim()}" updated`);
+      }
+      setEditingVenue(null);
+    } catch (e) { setVenueFormErr('Save failed: ' + e.message); }
+    finally { setVenueFormBusy(false); }
+  };
+  const handleDeleteVenue = async () => {
+    if (!deletingVenue) return;
+    if (deleteConfirmName.trim().toLowerCase() !== deletingVenue.name.trim().toLowerCase()) return;
+    setDeleting(true);
+    try {
+      await deleteVenue(deletingVenue.id);
+      onToast?.(`"${deletingVenue.name}" and all its data deleted`);
+      setDeletingVenue(null);
+      setDeleteConfirmName('');
+    } catch (e) { onToast?.('Delete failed: ' + e.message); }
+    finally { setDeleting(false); }
+  };
+
   return (
     <div>
       <h1 style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 32 }}>
@@ -99,67 +160,49 @@ export default function GroupAdminPanel({ onToast }) {
         </div>
       </div>
 
-      {/* Per-venue cards */}
       <div className="section">
         <div className="section-head">
           <h4>Venues</h4>
-          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-            Updates every 30s · last refresh just now
-          </span>
+          <button className="btn btn-sm btn-primary" onClick={openNew}>+ New venue</button>
         </div>
         <div className="venue-card-grid">
           {venues.map(v => {
             const stats = venueStats[v.id] || {};
             const isCurrent = v.id === device.venueId;
             return (
-              <div
-                key={v.id}
-                className={`venue-overview-card ${isCurrent ? 'current' : ''}`}
-              >
+              <div key={v.id} className={`venue-overview-card ${isCurrent ? 'current' : ''}`}>
                 <div className="venue-overview-head">
                   <div>
                     <div className="venue-overview-name">{v.name}</div>
                     {isCurrent && <span className="venue-current-badge">This device</span>}
+                    {v.address && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{v.address}</div>}
                   </div>
                   {stats.overdue > 0 && (
                     <div className="venue-overdue-badge">🔥 {stats.overdue}</div>
                   )}
                 </div>
                 <div className="venue-overview-stats">
-                  <div>
-                    <div className="ll">Today</div>
-                    <div className="vv" style={{ color: 'var(--brand)' }}>
-                      ${(stats.todaySales || 0).toFixed(2)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="ll">Orders</div>
-                    <div className="vv">{stats.todayOrders || 0}</div>
-                  </div>
-                  <div>
-                    <div className="ll">Open</div>
-                    <div className="vv">{stats.openOrders || 0}</div>
-                  </div>
-                  <div>
-                    <div className="ll">In kitchen</div>
-                    <div className="vv" style={{ color: stats.kitchenTickets > 0 ? 'var(--amber)' : 'var(--text-3)' }}>
-                      {stats.kitchenTickets || 0}
-                    </div>
-                  </div>
+                  <div><div className="ll">Today</div><div className="vv" style={{ color: 'var(--brand)' }}>${(stats.todaySales || 0).toFixed(2)}</div></div>
+                  <div><div className="ll">Orders</div><div className="vv">{stats.todayOrders || 0}</div></div>
+                  <div><div className="ll">Open</div><div className="vv">{stats.openOrders || 0}</div></div>
+                  <div><div className="ll">Kitchen</div><div className="vv" style={{ color: stats.kitchenTickets > 0 ? 'var(--amber)' : 'var(--text-3)' }}>{stats.kitchenTickets || 0}</div></div>
                 </div>
-                <div className="venue-overview-foot">
+                <div className="venue-overview-foot" style={{ display: 'flex', gap: 6 }}>
                   <button
                     className="btn btn-sm"
                     disabled={isCurrent}
                     style={{ opacity: isCurrent ? 0.4 : 1, flex: 1 }}
-                    onClick={() => {
-                      switchVenue(v.id, v.name);
-                      onToast?.(`Switched to ${v.name}`, 'info');
-                      setTimeout(() => window.location.reload(), 500);
-                    }}
+                    onClick={() => { switchVenue(v.id, v.name); onToast?.(`Switched to ${v.name}`, 'info'); setTimeout(() => window.location.reload(), 500); }}
                   >
-                    {isCurrent ? '✓ Current venue' : 'Switch to this venue'}
+                    {isCurrent ? '✓ Current' : 'Switch'}
                   </button>
+                  <button className="btn btn-sm" onClick={() => openEdit(v)} title="Edit venue">✎ Edit</button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => { setDeletingVenue(v); setDeleteConfirmName(''); }}
+                    title="Delete venue"
+                    disabled={isCurrent}
+                  >🗑</button>
                 </div>
               </div>
             );
@@ -167,13 +210,128 @@ export default function GroupAdminPanel({ onToast }) {
         </div>
       </div>
 
-      {/* Menu sync */}
+      {/* ── Menu sync ── */}
       <div className="section">
-        <div className="section-head">
-          <h4>Menu sync</h4>
-        </div>
+        <div className="section-head"><h4>Menu sync</h4></div>
         <MenuSync venues={venues} onToast={onToast} currentId={device.venueId} />
       </div>
+
+      {/* ── Edit / Create venue modal ── */}
+      {editingVenue && (
+        <div className="modal-overlay" onClick={() => !venueFormBusy && setEditingVenue(null)}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{editingVenue === 'new' ? '+ New venue' : `✎ Edit "${editingVenue.name}"`}</h3>
+              <button className="icon-btn" onClick={() => setEditingVenue(null)} disabled={venueFormBusy}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <div className="field">
+                <label>Venue name <span style={{ color: 'var(--red)' }}>*</span></label>
+                <input
+                  autoFocus
+                  value={venueForm.name}
+                  onChange={e => setVenueForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Sizzle N Sambar — Vic Park"
+                />
+              </div>
+              <div className="field-row">
+                <div className="field">
+                  <label>ABN</label>
+                  <input
+                    value={venueForm.abn}
+                    onChange={e => setVenueForm(f => ({ ...f, abn: e.target.value }))}
+                    placeholder="97 668 265 683"
+                    style={{ fontFamily: 'var(--font-mono)' }}
+                  />
+                </div>
+                <div className="field">
+                  <label>Timezone</label>
+                  <select value={venueForm.timezone} onChange={e => setVenueForm(f => ({ ...f, timezone: e.target.value }))}>
+                    {['Australia/Perth','Australia/Sydney','Australia/Melbourne','Australia/Brisbane','Australia/Adelaide','Australia/Darwin','Australia/Hobart','Pacific/Auckland','Asia/Singapore'].map(tz => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="field">
+                <label>Phone</label>
+                <input
+                  value={venueForm.phone}
+                  onChange={e => setVenueForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="08 9XXX XXXX"
+                  type="tel"
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                />
+              </div>
+              <div className="field">
+                <label>Address</label>
+                <input
+                  value={venueForm.address}
+                  onChange={e => setVenueForm(f => ({ ...f, address: e.target.value }))}
+                  placeholder="13/964 Albany Hwy, East Victoria Park WA 6101"
+                />
+              </div>
+              {editingVenue === 'new' && (
+                <div style={{ background: 'var(--blue-deep)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--blue)', lineHeight: 1.6 }}>
+                  A venue ID is auto-generated from the name. A default manager account (PIN 1234) is created automatically — change it in the Users panel after switching to this venue.
+                </div>
+              )}
+              {venueFormErr && (
+                <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 4 }}>{venueFormErr}</div>
+              )}
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setEditingVenue(null)} disabled={venueFormBusy}>Cancel</button>
+              <button className="btn btn-primary btn-lg" onClick={saveVenue} disabled={venueFormBusy}>
+                {venueFormBusy ? 'Saving…' : editingVenue === 'new' ? 'Create venue' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete venue confirm modal ── */}
+      {deletingVenue && (
+        <div className="modal-overlay" onClick={() => !deleting && setDeletingVenue(null)}>
+          <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-head" style={{ background: 'var(--red-deep)', borderColor: 'rgba(248,113,113,0.3)' }}>
+              <h3 style={{ color: 'var(--red)' }}>🗑 Delete venue</h3>
+              <button className="icon-btn" onClick={() => setDeletingVenue(null)} disabled={deleting}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 12 }}>
+                Permanently delete <b style={{ color: 'var(--brand)' }}>{deletingVenue.name}</b>?
+              </p>
+              <div style={{ background: 'var(--red-deep)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--red)', lineHeight: 1.6, marginBottom: 16 }}>
+                ⚠ This permanently deletes the venue and <b>all its data</b> — menu, orders, customers, tables, bookings, users. This cannot be undone.
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label style={{ color: 'var(--text-2)' }}>
+                  Type <b style={{ fontFamily: 'var(--font-mono)', color: 'var(--red)' }}>{deletingVenue.name}</b> to confirm
+                </label>
+                <input
+                  autoFocus
+                  value={deleteConfirmName}
+                  onChange={e => setDeleteConfirmName(e.target.value)}
+                  placeholder={deletingVenue.name}
+                  style={{ borderColor: deleteConfirmName.trim().toLowerCase() === deletingVenue.name.trim().toLowerCase() ? 'var(--red)' : undefined }}
+                />
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="btn-ghost" onClick={() => setDeletingVenue(null)} disabled={deleting}>Cancel</button>
+              <button
+                className="btn btn-danger btn-lg"
+                onClick={handleDeleteVenue}
+                disabled={deleting || deleteConfirmName.trim().toLowerCase() !== deletingVenue.name.trim().toLowerCase()}
+                style={{ opacity: deleteConfirmName.trim().toLowerCase() === deletingVenue.name.trim().toLowerCase() ? 1 : 0.4 }}
+              >
+                {deleting ? 'Deleting everything…' : '🗑 Delete venue forever'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
