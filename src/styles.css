@@ -1767,3 +1767,21 @@ main {
   border-top: 1px solid var(--border);
 }
 .recon-row .mono { font-family: var(--font-mono); }
+
+/* ── Reports panel ──────────────────────────────────────────────────────────── */
+input[type="date"] {
+  color-scheme: dark;
+}
+[data-theme='light'] input[type="date"] {
+  color-scheme: light;
+}
+[data-theme='cinema'] input[type="date"] {
+  color-scheme: dark;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}

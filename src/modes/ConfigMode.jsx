@@ -10,9 +10,11 @@ import CategoriesPanel from '../components/CategoriesPanel';
 import ModifiersPanel from '../components/ModifiersPanel';
 import TablesPanel from '../components/TablesPanel';
 import UsersPanel from '../components/UsersPanel';
+import ReportsPanel from '../components/ReportsPanel';
 
 const SECTIONS = [
   { id: 'overview',   label: 'Overview',          icon: '🏠' },
+  { id: 'reports',    label: 'Reports',            icon: '📊' },
   { id: 'group',      label: 'Group Admin',       icon: '🌐' },
   { id: 'eftpos',     label: 'EFTPOS Reconcile',  icon: '💳' },
   { id: 'importer',   label: 'Menu Importer',     icon: '✨' },
@@ -76,6 +78,7 @@ export default function ConfigMode() {
       {/* ── Body ── */}
       <main className="config-body">
         {section === 'overview'   && <OverviewSection device={device} venues={venues} onJumpTo={setSection} />}
+        {section === 'reports'    && <ReportsPanel />}
         {section === 'group'      && <GroupAdminPanel onToast={showToast} />}
         {section === 'eftpos'     && <EftposReconPanel />}
         {section === 'importer'   && <MenuImporter onDone={() => showToast('Menu imported', 'info')} />}
@@ -117,6 +120,7 @@ function OverviewSection({ device, venues, onJumpTo }) {
     }
   };
   const TILES = [
+    { id: 'reports',    icon: '📊', title: 'Sales reports', blurb: 'Itemwise, timewise, by order type. Custom date ranges. CSV export.', cta: 'Open reports →' },
     { id: 'importer',   icon: '✨', title: 'Import a menu', blurb: 'Paste text, upload Excel/PDF/Word, or snap a photo of a handwritten menu.', cta: 'Start importing →' },
     { id: 'group',      icon: '🌐', title: 'Group dashboard', blurb: 'See live sales and tables across all venues in one place.', cta: 'Open dashboard →' },
     { id: 'menu',       icon: '🍴', title: 'Edit menu items', blurb: 'Add, edit, deactivate items. Set prices and modifier groups.', cta: 'Manage menu →' },
