@@ -4,7 +4,8 @@ import {
   query, where, orderBy, onSnapshot, serverTimestamp, writeBatch,
   deleteDoc, increment
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 
 // Active venue ID — runtime-mutable to support multi-venue.
 // Lives in localStorage under 'hospostack.venueId'.
@@ -313,6 +314,19 @@ export async function getReceiptDeliveriesForOrder(orderId) {
     query(col('receipt_deliveries'), where('orderId', '==', orderId))
   );
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Manually resend a receipt — calls the resendReceipt Cloud Function which
+// queues a fresh receipt_deliveries doc that re-triggers deliverReceipt.
+// Pass customer to override the contact details (e.g. corrected email).
+export async function resendReceipt(orderId, customer = null) {
+  const callable = httpsCallable(functions, 'resendReceipt');
+  const res = await callable({
+    venueId: _venueId,
+    orderId,
+    customer
+  });
+  return res.data; // { ok: true, deliveryId }
 }
 
 // ── Bookings ───────────────────────────────────────────────────────────────

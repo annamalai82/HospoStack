@@ -10,6 +10,7 @@ import {
   persistentMultipleTabManager
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyCQXuw3OoUw-EdZk9SdXadVNdGUfzfgxjM',
@@ -38,6 +39,8 @@ try {
 
 export const db = _db;
 export const auth = getAuth(app);
+// Cloud Functions client — region matches setGlobalOptions in functions/index.js
+export const functions = getFunctions(app, 'australia-southeast1');
 
 // ─── Firestore schema (reference) ───────────────────────────────────────────
 // venues/{venueId}

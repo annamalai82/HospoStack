@@ -1,52 +1,57 @@
-# Receipt Delivery — Setup Guide
+# Cloud Functions — Receipt Delivery
 
-The Till mode captures the customer's name, email, and phone after payment. When the order settles, a Cloud Function picks it up and emails / SMSs the receipt — no printing, no paper. As a bonus, every customer becomes a row in `venues/{id}/customers` for future marketing.
+Two functions power digital receipts:
+
+| Function | Trigger | Purpose |
+|---|---|---|
+| `deliverReceipt` | Firestore `onCreate` on `receipt_deliveries/{id}` | Sends email + SMS, updates delivery status |
+| `resendReceipt`  | HTTPS callable from the app | Lets a manager re-send a receipt for a past order |
+
+The Till already captures `customer.email` / `customer.phone` at payment and writes a `receipt_deliveries` doc — `deliverReceipt` fires automatically. `resendReceipt` is wired into the Manager Hub Reports tab.
 
 ## What you need
 
 | Service | What it does | Account |
-|---------|--------------|---------|
-| **SendGrid** | Sends the HTML email receipt | [signup.sendgrid.com](https://signup.sendgrid.com) — free tier is 100 emails/day |
-| **Twilio** | Sends the SMS receipt | [twilio.com/try-twilio](https://www.twilio.com/try-twilio) — free trial credit ~ $15 |
+|---|---|---|
+| **SendGrid** | HTML email receipts | [signup.sendgrid.com](https://signup.sendgrid.com) — free tier 100/day |
+| **Twilio**   | SMS receipts | [twilio.com/try-twilio](https://www.twilio.com/try-twilio) — free trial ~$15 |
 
-Either one is optional. If you only configure SendGrid, customers who provide just a phone won't get an SMS (and vice versa). The Till UI will still capture both, the function just skips the channel it can't reach.
+Either one is optional. The other still attempts to send.
 
 ## One-time setup
 
-### 1. Upgrade the Firebase project to Blaze (pay-as-you-go)
+### 1. Upgrade Firebase to Blaze (pay-as-you-go)
 
-Cloud Functions require the Blaze plan. You'll still pay nothing on light usage — there's a generous free tier (2M invocations/month).
+Cloud Functions need Blaze. Free tier covers ~2M invocations/month.
 
-👉 Firebase Console → ⚙ Project Settings → Usage and Billing → modify plan → Blaze.
+Firebase Console → ⚙ Project Settings → Usage and Billing → modify plan → Blaze.
 
-### 2. Install function dependencies
+### 2. Install function deps
 
 ```bash
 cd functions
 npm install
 ```
 
-### 3. Set secrets
+### 3. Set secrets (one-time)
 
 ```bash
-# Email
 firebase functions:secrets:set SENDGRID_API_KEY
 firebase functions:secrets:set SENDGRID_FROM_EMAIL    # e.g. receipts@sizzlensambar.com.au
 firebase functions:secrets:set SENDGRID_FROM_NAME     # e.g. Sizzle N Sambar
 
-# SMS
 firebase functions:secrets:set TWILIO_ACCOUNT_SID
 firebase functions:secrets:set TWILIO_AUTH_TOKEN
 firebase functions:secrets:set TWILIO_FROM_NUMBER     # e.g. +61400000000
 ```
 
-The CLI will prompt you for each value. You can set only the email ones for now and skip Twilio.
+You can skip Twilio for now and just set the SendGrid ones — SMS will be skipped, email still works.
 
-### 4. Verify the SendGrid sender
+### 4. Verify your SendGrid sender
 
-SendGrid won't deliver from an unverified email address. In the SendGrid dashboard:
+SendGrid won't deliver from an unverified address. In their dashboard:
 
-- **Sender Authentication** → either verify a single sender (faster) or set up domain authentication (better for deliverability)
+**Sender Authentication** → verify a single sender (quick) or full domain auth (better for deliverability long-term).
 
 ### 5. Deploy
 
@@ -54,25 +59,25 @@ SendGrid won't deliver from an unverified email address. In the SendGrid dashboa
 firebase deploy --only functions
 ```
 
-This pushes the `deliverReceipt` function. From then on, every paid order with customer contact details triggers a delivery automatically.
+Or commit & push — the GitHub Actions workflow at `.github/workflows/deploy-functions.yml` auto-deploys when `functions/**` changes (requires GitHub secrets `FIREBASE_SERVICE_ACCOUNT_JSON` and `FIREBASE_PROJECT_ID`).
 
-## Trying it locally with the emulator (no real send)
+## Testing locally with the emulator
 
 ```bash
 cd functions
 npm run serve
 ```
 
-This starts the Firebase Emulator Suite. You'll see the function fire in the logs, but it won't actually call SendGrid/Twilio unless you provide the secrets. Useful for testing the Firestore flow without spending credits.
+This boots the Firebase Emulator Suite. The function fires on Firestore writes in the emulator but won't actually call SendGrid/Twilio unless secrets are set in the env.
 
 ## How a paid order flows through
 
 ```
-Till mode → customer enters email/phone
-         → settleOrder() writes orders/{id} with status='paid' + customer{}
+Till mode → customer enters email/phone, ticks receipt opt-in
+         → settleOrder() writes orders/{id} status='paid' + customer{}
          → queueReceiptDelivery() writes receipt_deliveries/{id}
                                        │
-                                       ▼  (Cloud Function trigger)
+                                       ▼  (Firestore trigger)
                               deliverReceipt(event)
                                        │
               ┌────────────────────────┼────────────────────────┐
@@ -82,20 +87,42 @@ Till mode → customer enters email/phone
               └────────────────────────┬────────────────────────┘
                                        ▼
                 receipt_deliveries/{id} update: status, result
+                orders/{id}.receiptDelivery = { status, email, sms, ... }
 ```
 
-The Manager Hub's Reports tab shows delivery status alongside each settled order (coming up — for now, look in `receipt_deliveries` in Firestore).
+## Resending from the Manager Hub
+
+```
+Reports tab → ⟳ Resend → calls resendReceipt(orderId, optional customer)
+                            │
+                            ▼ (writes new receipt_deliveries doc)
+                   deliverReceipt fires again
+```
+
+The customer's email/phone can be edited at resend time — useful when a typo on the original was the reason for failure.
+
+## Delivery status values
+
+| status | Meaning |
+|---|---|
+| `queued` | doc just created, function hasn't picked it up yet |
+| `sending` | function claimed the doc — prevents double-send on retry |
+| `delivered` | all channels sent successfully |
+| `partial` | one channel sent, the other failed |
+| `failed` | every channel attempted failed (see `result.errors`) |
+| `no_channels_configured` | neither SendGrid nor Twilio secrets are set |
+| `error` | unexpected error — see `error` field on the doc |
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
-|---------|-------|-----|
-| Delivery doc stuck at `queued` | Function not deployed or Blaze not enabled | Deploy + upgrade billing |
-| `status: 'no_channels_configured'` | None of the secrets set | Set at least one channel |
-| Email lands in spam | Unverified sender or domain | Set up SendGrid domain authentication |
-| SMS bounces | Twilio trial sandbox only sends to verified numbers | Verify the recipient in Twilio console, or upgrade |
-| `status: 'failed'` with error | Look at `result.errors` in the delivery doc | Usually an API-key or recipient-format issue |
+|---|---|---|
+| Delivery stuck at `queued` | Function not deployed or Blaze not enabled | Deploy + upgrade billing |
+| `no_channels_configured` | None of the secrets are set | Set at least one channel |
+| Email lands in spam | Unverified sender / no domain auth | SendGrid → Sender Authentication → Domain |
+| SMS bounces in trial | Twilio trial only sends to verified numbers | Verify the recipient in Twilio console, or upgrade |
+| `failed` with error | See `result.errors[]` on the delivery doc | Usually API-key or recipient-format issue |
 
-## Customer data for future promotions
+## Customer data for marketing
 
-Each settle pushes the customer into `venues/{id}/customers`, keyed by email (or phone) — repeat customers automatically accumulate `orderCount` and `lastSeenAt`. You can later export this list and run a SendGrid Marketing Campaign against it. The `marketingOptIn` flag defaults to `true`; add an unsubscribe link to your email footer to honour CAN-SPAM / Spam Act 2003.
+Every settle pushes the customer into `venues/{vid}/customers` keyed by email (or phone). Repeat customers accumulate `orderCount` and `lastSeenAt`. Export this list later for a SendGrid Marketing Campaign. `marketingOptIn` defaults to `true` — add an unsubscribe link to your email footer to honour CAN-SPAM / Spam Act 2003.
