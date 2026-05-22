@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   watchKitchenOrders, bumpOrderItem, updateOrder,
   extendOrderWait, watchVenue, updateVenue, watchTables
@@ -58,16 +58,6 @@ function orderFingerprint(order) {
     status: order.status,
   });
 }
-
-const STATIONS = [
-  { id: 'all', label: 'All' },
-  { id: 'kitchen', label: 'Kitchen' },
-  { id: 'bar', label: 'Bar' }
-];
-
-const DEFAULT_WARN_MINS  = 8;
-const DEFAULT_ALERT_MINS = 20;
-const EXTEND_MINS = 5;
 
 export default function KitchenMode() {
   const { device } = useDevice();
