@@ -648,9 +648,10 @@ main {
     var(--brand)   55%,
     var(--brand-deep, color-mix(in srgb, var(--brand) 40%, #000)) 100%
   );
-  color: var(--btn-primary-text);
+  color: var(--btn-primary-text) !important;
   border-color: transparent;
   font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.10);
   box-shadow:
     0 1px 0 rgba(255,255,255,calc(var(--btn-shimmer) * 2.5)) inset,
     0 -1px 0 rgba(0,0,0,0.30) inset,
@@ -676,7 +677,7 @@ main {
     0 2px 6px rgba(0,0,0,0.35),
     0 0 40px var(--btn-glow, rgba(255,122,69,0.45));
   /* Keep primary text color on hover — don't inherit btn-text-hover */
-  color: var(--btn-primary-text);
+  color: var(--btn-primary-text) !important;
   background: linear-gradient(
     158deg,
     var(--brand-2) 0%,
@@ -693,7 +694,7 @@ main {
     0 -1px 0 rgba(0,0,0,0.40) inset,
     0 2px 8px var(--btn-shadow),
     0 0 14px var(--btn-glow, rgba(255,122,69,0.20));
-  color: var(--btn-primary-text);
+  color: var(--btn-primary-text) !important;
 }
 
 /* ── DANGER ──────────────────────────────────────────────────────────────── */
@@ -940,12 +941,16 @@ main {
 }
 .cat-chip.active {
   background: linear-gradient(135deg, var(--brand-2, var(--brand)), var(--brand));
-  color: var(--btn-primary-text, #18120e);
+  /* Always use the pre-computed high-contrast text colour for this theme */
+  color: var(--btn-primary-text, #18120e) !important;
   border-color: transparent;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  /* Text shadow for extra legibility on any brand colour */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.15);
   box-shadow:
     0 1px 0 rgba(255,255,255,calc(var(--btn-shimmer,0.10) * 2.5)) inset,
-    0 3px 10px var(--btn-shadow, rgba(0,0,0,0.40)),
+    0 3px 12px var(--btn-shadow, rgba(0,0,0,0.40)),
     0 0 16px var(--btn-glow, rgba(255,122,69,0.30));
 }
 .cat-chip:active { transform: scale(0.96); }

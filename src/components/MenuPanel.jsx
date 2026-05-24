@@ -100,7 +100,6 @@ export default function MenuPanel({ initialTab, onToast } = {}) {
                   key={c.id}
                   className={`cat-chip ${filterCat === c.id ? 'active' : ''}`}
                   onClick={() => setFilterCat(c.id)}
-                  style={filterCat === c.id ? { borderColor: c.color, color: c.color } : {}}
                 >{c.name}</button>
               ))}
             </div>

@@ -116,7 +116,6 @@ export default function OrderPane({
           <button key={c.id}
             className={`cat-chip ${activeCat === c.id && !search ? 'active' : ''}`}
             onClick={() => { setActiveCat(c.id); setSearch(''); }}
-            style={activeCat === c.id && !search ? { borderColor: c.color, color: c.color } : {}}
           >{c.name}</button>
         ))}
       </div>
@@ -179,7 +178,6 @@ export default function OrderPane({
               <button key={c.id}
                 className={`cat-chip ${activeCat === c.id && !search ? 'active' : ''}`}
                 onClick={() => { setActiveCat(c.id); setSearch(''); }}
-                style={activeCat === c.id && !search ? { borderColor: c.color, color: c.color } : {}}
               >{c.name}</button>
             ))}
           </div>
