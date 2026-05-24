@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DeviceProvider, useDevice } from './context/DeviceContext';
 import { ThemeProvider } from './context/ThemeContext';
+import FloatingThemePicker from './components/ThemePicker';
 import ConfigScreen from './pages/ConfigScreen';
 import PinScreen from './pages/PinScreen';
 import TopBar from './components/TopBar';
@@ -95,6 +96,7 @@ service cloud.firestore {
         {device.mode === 'till' && <TillMode />}
         {device.mode === 'config' && <ConfigMode />}
       </main>
+      <FloatingThemePicker />
     </div>
   );
 }

@@ -1,26 +1,19 @@
 import { useState } from 'react';
 import { useDevice } from '../context/DeviceContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, THEMES } from '../context/ThemeContext';
 import ManagerHub from './ManagerHub';
 import ConnectionIndicator from './ConnectionIndicator';
 
-const THEMES = [
-  { id: 'dark',   icon: '🌑', label: 'Dark' },
-  { id: 'light',  icon: '☀️', label: 'Light' },
-  { id: 'cinema', icon: '🎬', label: 'Cinema' },
-];
-
 export default function TopBar() {
-  const { device, logout, reset } = useDevice();
-  const { theme, setTheme } = useTheme();
+  const { device, logout } = useDevice();
+  const { theme } = useTheme();
   const [showHub, setShowHub] = useState(false);
-  const [showTheme, setShowTheme] = useState(false);
 
   const initials = (device.user?.name || '?')
     .split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
 
   const isManager = device.user?.role === 'manager';
-  const currentTheme = THEMES.find(t => t.id === theme) || THEMES[0];
+  const currentTheme = THEMES.find(t => t.id === theme);
 
   return (
     <>
@@ -50,40 +43,25 @@ export default function TopBar() {
 
         {/* User / actions — right */}
         <div className="topbar-right">
-          {/* Avatar always visible */}
           <div className="user-chip">
             <div className="avatar">{initials}</div>
             <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{device.user.name}</span>
           </div>
-          {/* Just avatar on mobile */}
-          <div className="avatar" style={{ display: 'none' /* shown below via CSS */ }}>{initials}</div>
 
-          {/* Theme picker */}
-          <div style={{ position: 'relative' }}>
-            <button
-              className="btn-ghost"
-              onClick={() => setShowTheme(v => !v)}
-              title="Change theme"
-              style={{ padding: '8px', fontSize: 16 }}
+          {/* Active theme indicator — tiny, opens FloatingThemePicker hint */}
+          {currentTheme && (
+            <span
+              title={`Theme: ${currentTheme.label} — click 🎨 to change`}
+              style={{
+                fontSize: 12, padding: '3px 8px', borderRadius: 999,
+                background: 'var(--surface-2)', color: 'var(--text-3)',
+                display: 'flex', alignItems: 'center', gap: 4, cursor: 'default'
+              }}
             >
-              {currentTheme.icon}
-            </button>
-            {showTheme && (
-              <div className="theme-dropdown">
-                {THEMES.map(t => (
-                  <button
-                    key={t.id}
-                    className={`theme-option ${theme === t.id ? 'active' : ''}`}
-                    onClick={() => { setTheme(t.id); setShowTheme(false); }}
-                  >
-                    <span>{t.icon}</span>
-                    <span>{t.label}</span>
-                    {theme === t.id && <span style={{ marginLeft: 'auto', color: 'var(--brand)' }}>✓</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+              {currentTheme.emoji}
+              <span style={{ display: 'none' /* hide on narrow */ }}>{currentTheme.label}</span>
+            </span>
+          )}
 
           {isManager && (
             <button
@@ -91,9 +69,7 @@ export default function TopBar() {
               onClick={() => setShowHub(true)}
               title="Manager settings"
               style={{ padding: '8px' }}
-            >
-              ⚙
-            </button>
+            >⚙</button>
           )}
           <button className="btn-ghost" onClick={logout} style={{ padding: '8px' }} title="Lock">🔒</button>
         </div>
