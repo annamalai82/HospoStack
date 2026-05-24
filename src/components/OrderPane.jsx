@@ -126,13 +126,15 @@ export default function OrderPane({
         <button
           className="menu-item-card menu-item-card--misc"
           onClick={() => setShowMisc(true)}
-          style={{ borderStyle: 'dashed', opacity: 0.75 }}
         >
-          <div>
+          <div className="card-body">
             <div className="station">misc</div>
             <div className="name">+ Miscellaneous Item</div>
           </div>
-          <div className="price" style={{ color: 'var(--text-3)' }}>custom $</div>
+          <div className="card-footer">
+            <div className="price" style={{ color: 'var(--text-3)' }}>custom $</div>
+            <div className="add-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', boxShadow: 'none' }}>+</div>
+          </div>
         </button>
       </div>
     </div>
@@ -187,13 +189,15 @@ export default function OrderPane({
             <button
               className="menu-item-card menu-item-card--misc"
               onClick={() => setShowMisc(true)}
-              style={{ borderStyle: 'dashed', opacity: 0.75 }}
             >
-              <div>
+              <div className="card-body">
                 <div className="station">misc</div>
                 <div className="name">+ Miscellaneous Item</div>
               </div>
-              <div className="price" style={{ color: 'var(--text-3)' }}>custom $</div>
+              <div className="card-footer">
+                <div className="price" style={{ color: 'var(--text-3)' }}>custom $</div>
+                <div className="add-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', boxShadow: 'none' }}>+</div>
+              </div>
             </button>
           </div>
         </div>
@@ -339,18 +343,29 @@ function MiscItemModal({ onCancel, onConfirm }) {
 
 function MenuItemCard({ item: it, onTap }) {
   const hasOptions = (it.modifierGroupIds || []).length > 0;
+  // Clean the display name — strip protein variants from the name itself
+  // (they live in the modifier group, not the name)
+  const displayName = it.name;
+
   return (
     <button className="menu-item-card" onClick={() => onTap(it)}>
-      <div>
+      <div className="card-body">
         <div className="station">
           {it.station}
-          {hasOptions && <span style={{ marginLeft: 5, color: 'var(--brand)', fontSize: 9, letterSpacing: '0.1em' }}>· OPTIONS</span>}
         </div>
-        <div className="name">{it.name}</div>
+        <div className="name">{displayName}</div>
+        {hasOptions && (
+          <div className="options-badge">
+            ⚡ Options available
+          </div>
+        )}
       </div>
-      <div className="price">
-        ${it.price.toFixed(2)}
-        {hasOptions && <span style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 400 }}> +</span>}
+      <div className="card-footer">
+        <div className="price">
+          {hasOptions && <span className="price-from">from </span>}
+          ${it.price.toFixed(2)}
+        </div>
+        <div className="add-icon">+</div>
       </div>
     </button>
   );
