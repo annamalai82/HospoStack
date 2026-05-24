@@ -380,13 +380,13 @@ export default function TillMode() {
       {/* When starting a NEW order: pick type, then table or customer name */}
       {!activeOrder && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div className="btn-toggle-group btn-toggle-group--2">
             <button
-              className={orderType === 'takeaway' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}
+              className={`btn-toggle ${orderType === 'takeaway' ? 'btn-toggle--active' : ''}`}
               onClick={() => { setOrderType('takeaway'); setPendingTableId(''); }}
             >🥡 Takeaway</button>
             <button
-              className={orderType === 'dine-in-pickup' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}
+              className={`btn-toggle ${orderType === 'dine-in-pickup' ? 'btn-toggle--active' : ''}`}
               onClick={() => { setOrderType('dine-in-pickup'); setPendingCustomerName(''); }}
             >🍽 Dine-in</button>
           </div>
@@ -422,17 +422,26 @@ export default function TillMode() {
 
           {orderType === 'takeaway' && (
             <div>
-              <label style={{ fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
-                Customer name <span style={{ color: 'var(--red)' }}>*required</span>
+              <label style={{
+                fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.08em',
+                textTransform: 'uppercase', marginBottom: 6, display: 'flex',
+                alignItems: 'center', gap: 6, fontWeight: 700
+              }}>
+                Customer name
+                <span style={{
+                  fontSize: 10, padding: '2px 6px', borderRadius: 999,
+                  background: 'color-mix(in srgb, var(--brand) 18%, transparent)',
+                  color: 'var(--brand)', letterSpacing: '0.06em',
+                  fontWeight: 700
+                }}>REQUIRED</span>
               </label>
               <input
                 value={pendingCustomerName}
                 onChange={e => setPendingCustomerName(e.target.value)}
                 placeholder="e.g. Priya, John"
                 style={{
-                  fontSize: 15, padding: '10px 12px',
-                  borderColor: !pendingCustomerName.trim() ? 'var(--red)' : undefined,
-                  outline: !pendingCustomerName.trim() ? '1px solid var(--red)' : undefined
+                  fontSize: 15, padding: '11px 14px',
+                  fontWeight: 500,
                 }}
               />
             </div>

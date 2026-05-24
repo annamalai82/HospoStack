@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTheme, THEMES } from '../context/ThemeContext';
 
-const GROUPS = ['Base', 'Indian Luxury', 'Fast Casual', 'Operational'];
+const GROUPS = ['Base', 'Indian Luxury', 'Fast Casual', 'Vibrant', 'Operational'];
 
 /**
  * FloatingThemePicker — rendered in every mode's root so the theme button

@@ -2796,3 +2796,458 @@ input[type="date"] {
     0 6px 22px rgba(0,0,0,0.22),
     0 0 32px rgba(196,74,26,0.38);
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SEGMENTED TOGGLE — used for Takeaway/Dine-in, order type pickers, etc.
+   Always-visible inactive state — never invisible against background.
+   Add class 'btn-toggle' and toggle 'btn-toggle--active' on the chosen one.
+   ════════════════════════════════════════════════════════════════════════════ */
+.btn-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 18px;
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: 15px;
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+  min-height: var(--tap);
+  white-space: nowrap;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform 90ms cubic-bezier(0.34,1.56,0.64,1),
+    box-shadow 140ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease,
+    filter 120ms ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+
+  /* Inactive default state — uses brand colour at low opacity so it's
+     visible in EVERY theme, including neon black-on-black */
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--brand) 8%, var(--surface-2)) 0%,
+      color-mix(in srgb, var(--brand) 3%, var(--surface))   100%
+    );
+  color: var(--text-2);
+  border: 1px solid color-mix(in srgb, var(--brand) 25%, var(--border));
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.05) inset,
+    0 2px 8px rgba(0,0,0,0.22),
+    0 1px 2px rgba(0,0,0,0.18);
+}
+
+.btn-toggle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.08) 0%,
+    rgba(255,255,255,0.02) 40%,
+    transparent 100%);
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.btn-toggle:hover:not(.btn-toggle--active) {
+  transform: translateY(-1px);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.08) inset,
+    0 4px 14px rgba(0,0,0,0.28),
+    0 0 14px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+
+.btn-toggle:active:not(.btn-toggle--active) {
+  transform: translateY(1px) scale(0.985);
+  filter: brightness(0.92);
+}
+
+.btn-toggle--active {
+  background: linear-gradient(160deg,
+    var(--brand-2) 0%,
+    var(--brand)   55%,
+    var(--brand-deep) 100%);
+  color: #18120e;
+  border-color: transparent;
+  font-weight: 800;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.28) inset,
+    0 -1px 0 rgba(0,0,0,0.3) inset,
+    0 4px 16px rgba(0,0,0,0.32),
+    0 0 24px color-mix(in srgb, var(--brand) 38%, transparent);
+  transform: translateY(-1px);
+}
+.btn-toggle--active::before {
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.32) 0%,
+    rgba(255,255,255,0.10) 35%,
+    transparent 100%);
+}
+
+.btn-toggle--active:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.32) inset,
+    0 -1px 0 rgba(0,0,0,0.32) inset,
+    0 6px 20px rgba(0,0,0,0.36),
+    0 0 32px color-mix(in srgb, var(--brand) 52%, transparent);
+}
+
+/* Toggle group container — adds segmented look */
+.btn-toggle-group {
+  display: grid;
+  gap: 6px;
+}
+.btn-toggle-group--2 { grid-template-columns: 1fr 1fr; }
+.btn-toggle-group--3 { grid-template-columns: repeat(3, 1fr); }
+
+/* Per-theme overrides — make sure light text on light-bg themes works */
+[data-theme='light'] .btn-toggle--active,
+[data-theme='clay-copper'] .btn-toggle--active {
+  color: #fff;
+}
+[data-theme='street-neon'] .btn-toggle--active {
+  color: #0a0a08;
+  text-shadow: 0 1px 0 rgba(255,255,200,0.45);
+}
+[data-theme='street-neon'] .btn-toggle:not(.btn-toggle--active) {
+  background: linear-gradient(160deg, #1c1c18 0%, #131311 100%);
+  color: #d8d4b0;
+  border-color: rgba(245,197,24,0.30);
+}
+[data-theme='kitchen-rush'] .btn-toggle {
+  border-radius: 6px;
+}
+[data-theme='kitchen-rush'] .btn-toggle::before { display: none; }
+[data-theme='kitchen-rush'] .btn-toggle:not(.btn-toggle--active) {
+  background: #2a2a2a;
+  border: 2px solid #555;
+  color: #ddd;
+}
+[data-theme='kitchen-rush'] .btn-toggle--active {
+  background: var(--brand);
+  color: #fff;
+  border: 2px solid #cc2a20;
+  font-weight: 900;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   NEW THEMES (round 2)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Midnight Sapphire — deep sapphire blue, platinum, ice white ─────────── */
+[data-theme='midnight-sapphire'] {
+  --bg:           #0a1430;
+  --bg-2:         #0e1a3d;
+  --surface:      #142250;
+  --surface-2:    #1a2c62;
+  --surface-3:    #233878;
+  --border:       #2c4490;
+  --border-strong:#3a5cb0;
+  --text:         #e8eef8;
+  --text-2:       #a8b8d4;
+  --text-3:       #6878a0;
+  --brand:        #4a8acc;
+  --brand-2:      #7aaadf;
+  --brand-deep:   #0a3060;
+  --green:        #6dd3a0;
+  --green-deep:   #0e2a20;
+  --amber:        #e0c060;
+  --amber-deep:   #3a2c08;
+  --red:          #e87a78;
+  --red-deep:     #3a1418;
+  --blue:         #4a8acc;
+  --blue-deep:    #0a3060;
+  --violet:       #a890e8;
+  --shadow:       0 1px 0 rgba(122,170,223,0.10) inset, 0 8px 24px rgba(0,0,0,0.6);
+  --shadow-lg:    0 1px 0 rgba(122,170,223,0.12) inset, 0 24px 60px rgba(0,0,0,0.75);
+}
+[data-theme='midnight-sapphire'] .topbar {
+  background: rgba(10,20,48,0.97);
+  border-bottom-color: #2c4490;
+}
+[data-theme='midnight-sapphire'] .app.app--with-bg {
+  background:
+    radial-gradient(900px 400px at 80% -10%, rgba(74,138,204,0.18), transparent 60%),
+    radial-gradient(600px 300px at 5% 90%, rgba(168,144,232,0.10), transparent 55%),
+    var(--bg);
+}
+[data-theme='midnight-sapphire'] .btn-primary {
+  background: linear-gradient(160deg, #7aaadf, #4a8acc, #1a4480);
+  color: #e8eef8;
+  text-shadow: 0 1px 2px rgba(10,30,80,0.5);
+  box-shadow:
+    0 1px 0 rgba(200,220,255,0.30) inset,
+    0 -1px 0 rgba(0,10,40,0.4) inset,
+    0 4px 18px rgba(0,0,0,0.45),
+    0 0 32px rgba(74,138,204,0.5);
+}
+[data-theme='midnight-sapphire'] .btn-primary:hover {
+  box-shadow:
+    0 1px 0 rgba(200,220,255,0.35) inset,
+    0 8px 28px rgba(0,0,0,0.5),
+    0 0 44px rgba(74,138,204,0.65);
+}
+[data-theme='midnight-sapphire'] .btn {
+  background: linear-gradient(160deg, #233878, #1a2c62, #142250);
+  border-color: #3a5cb0;
+}
+[data-theme='midnight-sapphire'] input[type="date"] { color-scheme: dark; }
+
+/* ── Spicy Curry — tomato red, turmeric yellow, coriander green ──────────── */
+[data-theme='spicy-curry'] {
+  --bg:           #1a0a08;
+  --bg-2:         #220e0a;
+  --surface:      #2c150e;
+  --surface-2:    #341a12;
+  --surface-3:    #3e2218;
+  --border:       #4e2c20;
+  --border-strong:#623828;
+  --text:         #fce8c8;
+  --text-2:       #d4a878;
+  --text-3:       #8a6a44;
+  --brand:        #e8472b;
+  --brand-2:      #ff6845;
+  --brand-deep:   #6a1a0a;
+  --green:        #7eb858;
+  --green-deep:   #1e2e10;
+  --amber:        #f0c040;
+  --amber-deep:   #3a2c08;
+  --red:          #e8472b;
+  --red-deep:     #3a1008;
+  --blue:         #6890b0;
+  --blue-deep:    #1a2838;
+  --violet:       #c08068;
+  --shadow:       0 1px 0 rgba(255,180,120,0.10) inset, 0 8px 24px rgba(0,0,0,0.55);
+  --shadow-lg:    0 1px 0 rgba(255,180,120,0.12) inset, 0 24px 60px rgba(0,0,0,0.7);
+}
+[data-theme='spicy-curry'] .topbar {
+  background: rgba(26,10,8,0.97);
+  border-bottom-color: #4e2c20;
+}
+[data-theme='spicy-curry'] .app.app--with-bg {
+  background:
+    radial-gradient(900px 400px at 75% -10%, rgba(232,71,43,0.18), transparent 60%),
+    radial-gradient(500px 300px at 10% 85%, rgba(240,192,64,0.10), transparent 55%),
+    var(--bg);
+}
+[data-theme='spicy-curry'] .btn-primary {
+  background: linear-gradient(160deg, #ff6845, #e8472b, #8a1a0a);
+  color: #fce8c8;
+  box-shadow:
+    0 1px 0 rgba(255,220,180,0.30) inset,
+    0 -1px 0 rgba(0,0,0,0.4) inset,
+    0 4px 18px rgba(0,0,0,0.4),
+    0 0 32px rgba(232,71,43,0.5);
+  text-shadow: 0 1px 2px rgba(80,10,0,0.4);
+}
+[data-theme='spicy-curry'] .btn-primary:hover {
+  box-shadow:
+    0 1px 0 rgba(255,220,180,0.35) inset,
+    0 8px 28px rgba(0,0,0,0.5),
+    0 0 44px rgba(232,71,43,0.65);
+}
+[data-theme='spicy-curry'] .btn {
+  background: linear-gradient(160deg, #3e2218, #341a12, #2c150e);
+  border-color: #623828;
+}
+[data-theme='spicy-curry'] input[type="date"] { color-scheme: dark; }
+
+/* ── Mango Lassi — light bright theme, sunset mango + cream ──────────────── */
+[data-theme='mango-lassi'] {
+  --bg:           #fff5e8;
+  --bg-2:         #ffe8d4;
+  --surface:      #ffffff;
+  --surface-2:    #fff0dc;
+  --surface-3:    #ffe4c8;
+  --border:       #f0d4b0;
+  --border-strong:#dcb888;
+  --text:         #3a1a08;
+  --text-2:       #7a4818;
+  --text-3:       #a8784c;
+  --brand:        #ff8c2a;
+  --brand-2:      #ffa854;
+  --brand-deep:   #ffe0c0;
+  --green:        #4a9858;
+  --green-deep:   #d8edd4;
+  --amber:        #d89020;
+  --amber-deep:   #ffe8c0;
+  --red:          #d04848;
+  --red-deep:     #ffd8d4;
+  --blue:         #4080b8;
+  --blue-deep:    #d4e4f0;
+  --violet:       #8060a0;
+  --shadow:       0 1px 0 rgba(0,0,0,0.03) inset, 0 2px 12px rgba(200,100,30,0.10);
+  --shadow-lg:    0 1px 0 rgba(0,0,0,0.04) inset, 0 12px 36px rgba(200,100,30,0.14);
+}
+[data-theme='mango-lassi'] .topbar {
+  background: rgba(255,245,232,0.95);
+  border-bottom-color: #f0d4b0;
+}
+[data-theme='mango-lassi'] .app.app--with-bg {
+  background:
+    radial-gradient(900px 400px at 80% -8%, rgba(255,140,42,0.18), transparent 60%),
+    radial-gradient(500px 280px at 5% 90%, rgba(255,200,120,0.20), transparent 55%),
+    var(--bg);
+}
+[data-theme='mango-lassi'] .btn-primary {
+  background: linear-gradient(160deg, #ffa854, #ff8c2a, #c46810);
+  color: #fff8ed;
+  box-shadow:
+    0 1px 0 rgba(255,220,180,0.55) inset,
+    0 -1px 0 rgba(120,50,0,0.18) inset,
+    0 4px 16px rgba(200,100,30,0.18),
+    0 0 24px rgba(255,140,42,0.32);
+}
+[data-theme='mango-lassi'] .btn-primary:hover {
+  box-shadow:
+    0 1px 0 rgba(255,220,180,0.62) inset,
+    0 6px 22px rgba(200,100,30,0.22),
+    0 0 36px rgba(255,140,42,0.44);
+}
+[data-theme='mango-lassi'] .btn {
+  background: linear-gradient(160deg, #ffffff, #fff0dc, #ffe4c8);
+  border-color: #dcb888;
+}
+[data-theme='mango-lassi'] input[type="date"] { color-scheme: light; }
+
+/* ── Sporty Arena — electric blue, lime, jet black ───────────────────────── */
+[data-theme='sporty-arena'] {
+  --bg:           #0a1020;
+  --bg-2:         #0e1828;
+  --surface:      #142238;
+  --surface-2:    #1a2c48;
+  --surface-3:    #243a58;
+  --border:       #2c4a6c;
+  --border-strong:#3a5e88;
+  --text:         #eaf4ff;
+  --text-2:       #94b0c8;
+  --text-3:       #5a7090;
+  --brand:        #00aaff;
+  --brand-2:      #40c8ff;
+  --brand-deep:   #002a50;
+  --green:        #bfff00;
+  --green-deep:   #1e3008;
+  --amber:        #ffc830;
+  --amber-deep:   #3a2c08;
+  --red:          #ff3855;
+  --red-deep:     #3a0e18;
+  --blue:         #00aaff;
+  --blue-deep:    #002a50;
+  --violet:       #9060ff;
+  --shadow:       0 1px 0 rgba(64,200,255,0.10) inset, 0 8px 24px rgba(0,0,0,0.6);
+  --shadow-lg:    0 1px 0 rgba(64,200,255,0.12) inset, 0 24px 60px rgba(0,0,0,0.75);
+}
+[data-theme='sporty-arena'] .topbar {
+  background: rgba(10,16,32,0.97);
+  border-bottom: 2px solid #00aaff;
+}
+[data-theme='sporty-arena'] .app.app--with-bg {
+  background:
+    radial-gradient(900px 400px at 80% -10%, rgba(0,170,255,0.18), transparent 60%),
+    radial-gradient(500px 280px at 5% 90%, rgba(191,255,0,0.10), transparent 55%),
+    var(--bg);
+}
+[data-theme='sporty-arena'] .btn-primary {
+  background: linear-gradient(160deg, #40c8ff, #00aaff, #006a98);
+  color: #ffffff;
+  box-shadow:
+    0 1px 0 rgba(180,230,255,0.30) inset,
+    0 -1px 0 rgba(0,40,80,0.4) inset,
+    0 4px 18px rgba(0,0,0,0.45),
+    0 0 32px rgba(0,170,255,0.55);
+  text-shadow: 0 1px 2px rgba(0,40,80,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+[data-theme='sporty-arena'] .btn-primary:hover {
+  box-shadow:
+    0 1px 0 rgba(180,230,255,0.35) inset,
+    0 8px 28px rgba(0,0,0,0.5),
+    0 0 48px rgba(0,170,255,0.72);
+}
+[data-theme='sporty-arena'] .btn {
+  background: linear-gradient(160deg, #243a58, #1a2c48, #142238);
+  border-color: #3a5e88;
+}
+[data-theme='sporty-arena'] input[type="date"] { color-scheme: dark; }
+
+/* ── Rose Gold — dusty pink, rose gold, cream ─────────────────────────────── */
+[data-theme='rose-gold'] {
+  --bg:           #1a1014;
+  --bg-2:         #22141a;
+  --surface:      #2c1a20;
+  --surface-2:    #382028;
+  --surface-3:    #422830;
+  --border:       #54323e;
+  --border-strong:#6c424e;
+  --text:         #f5e0d6;
+  --text-2:       #c8a098;
+  --text-3:       #8a6068;
+  --brand:        #e89b8a;
+  --brand-2:      #f0b8aa;
+  --brand-deep:   #5a2a28;
+  --green:        #88c098;
+  --green-deep:   #1a2c20;
+  --amber:        #d8a878;
+  --amber-deep:   #3a2818;
+  --red:          #d06868;
+  --red-deep:     #3a1818;
+  --blue:         #8898c0;
+  --blue-deep:    #1a2030;
+  --violet:       #b088b0;
+  --shadow:       0 1px 0 rgba(232,155,138,0.10) inset, 0 8px 24px rgba(0,0,0,0.55);
+  --shadow-lg:    0 1px 0 rgba(232,155,138,0.12) inset, 0 24px 60px rgba(0,0,0,0.7);
+}
+[data-theme='rose-gold'] .topbar {
+  background: rgba(26,16,20,0.97);
+  border-bottom-color: #54323e;
+}
+[data-theme='rose-gold'] .app.app--with-bg {
+  background:
+    radial-gradient(900px 400px at 80% -10%, rgba(232,155,138,0.16), transparent 60%),
+    radial-gradient(500px 280px at 5% 90%, rgba(200,160,152,0.08), transparent 55%),
+    var(--bg);
+}
+[data-theme='rose-gold'] .btn-primary {
+  background: linear-gradient(160deg, #f0b8aa, #e89b8a, #a05a4a);
+  color: #1a1014;
+  box-shadow:
+    0 1px 0 rgba(255,220,210,0.35) inset,
+    0 -1px 0 rgba(60,20,18,0.32) inset,
+    0 4px 18px rgba(0,0,0,0.4),
+    0 0 28px rgba(232,155,138,0.42);
+}
+[data-theme='rose-gold'] .btn-primary:hover {
+  box-shadow:
+    0 1px 0 rgba(255,220,210,0.42) inset,
+    0 8px 28px rgba(0,0,0,0.45),
+    0 0 42px rgba(232,155,138,0.58);
+}
+[data-theme='rose-gold'] .btn {
+  background: linear-gradient(160deg, #422830, #382028, #2c1a20);
+  border-color: #6c424e;
+}
+[data-theme='rose-gold'] input[type="date"] { color-scheme: dark; }
+
+/* ── Premium input focus rings (theme-aware) ──────────────────────────────── */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--brand) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent),
+    0 1px 3px rgba(0,0,0,0.12);
+  transition: border-color 120ms, box-shadow 120ms;
+}

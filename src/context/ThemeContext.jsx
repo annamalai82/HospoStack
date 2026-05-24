@@ -55,6 +55,16 @@ export const THEMES = [
     preview: ['#1c1508', '#2d6a4f', '#e8d5b0'],
   },
   {
+    id: 'midnight-sapphire',
+    label: 'Midnight Sapphire',
+    emoji: '💎',
+    group: 'Indian Luxury',
+    description: 'Deep sapphire blue, platinum silver & ice white — modern luxury fine dining',
+    preview: ['#0a1430', '#4a8acc', '#e8eef8'],
+  },
+
+  // ── Fast Casual ───────────────────────────────────────────────────────────
+  {
     id: 'street-neon',
     label: 'Street Food Neon',
     emoji: '🌆',
@@ -78,6 +88,42 @@ export const THEMES = [
     description: 'Mustard yellow, retro red & teal — playful vintage Indian cinema feel',
     preview: ['#1a1008', '#e8b84b', '#c0392b'],
   },
+  {
+    id: 'spicy-curry',
+    label: 'Spicy Curry',
+    emoji: '🌶',
+    group: 'Fast Casual',
+    description: 'Tomato red, turmeric yellow & coriander green — bold spice-market energy',
+    preview: ['#1a0a08', '#e8472b', '#f0c040'],
+  },
+  {
+    id: 'mango-lassi',
+    label: 'Mango Lassi',
+    emoji: '🥭',
+    group: 'Fast Casual',
+    description: 'Sunset mango, creamy peach & soft pink — bright cheerful breakfast/lunch',
+    preview: ['#fff5e8', '#ff8c2a', '#3a1a08'],
+  },
+
+  // ── Vibrant ───────────────────────────────────────────────────────────────
+  {
+    id: 'sporty-arena',
+    label: 'Sporty Arena',
+    emoji: '🏆',
+    group: 'Vibrant',
+    description: 'Electric blue, neon lime & jet black — energetic sports-bar / cafe',
+    preview: ['#0a1020', '#00aaff', '#bfff00'],
+  },
+  {
+    id: 'rose-gold',
+    label: 'Rose Gold',
+    emoji: '🌹',
+    group: 'Vibrant',
+    description: 'Rose gold, dusty pink & cream — feminine modern cafe / patisserie',
+    preview: ['#1a1014', '#e89b8a', '#f5e0d6'],
+  },
+
+  // ── Operational ───────────────────────────────────────────────────────────
   {
     id: 'kitchen-rush',
     label: 'Kitchen Rush',
