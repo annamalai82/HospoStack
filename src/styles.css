@@ -2857,49 +2857,61 @@ input[type="date"] {
    Works on top of whatever theme is currently active
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Floating action button ── */
-.theme-fab {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 1000;
+/* ── TopBar theme button (replaces floating FAB) ── */
+.topbar-theme-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px 8px 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  gap: 7px;
+  padding: 6px 10px 6px 8px;
+  background: var(--btn-bg);
+  border: 1.5px solid var(--btn-border);
   border-radius: 999px;
-  box-shadow: var(--shadow-lg);
   cursor: pointer;
-  transition: transform 120ms, box-shadow 120ms, background 120ms;
-  user-select: none;
+  transition: background 120ms, border-color 120ms, transform 80ms, box-shadow 120ms;
+  box-shadow: 0 1px 4px var(--btn-shadow, rgba(0,0,0,0.3));
+  min-height: 36px;
+  white-space: nowrap;
+  z-index: 201;
+  position: relative;
 }
-.theme-fab:hover {
-  background: var(--surface-3);
-  transform: scale(1.05);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+.topbar-theme-btn:hover {
+  background: var(--btn-bg-hover);
+  border-color: var(--btn-border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px var(--btn-shadow, rgba(0,0,0,0.35));
 }
-.theme-fab:active { transform: scale(0.97); }
+.topbar-theme-btn:active { transform: scale(0.97); }
 
-.theme-fab-swatch {
+.topbar-theme-swatch {
   display: flex;
-  width: 28px;
-  height: 20px;
+  width: 32px;
+  height: 18px;
   border-radius: 999px;
   overflow: hidden;
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--btn-border-hover);
   flex-shrink: 0;
 }
-.theme-fab-swatch span {
-  flex: 1;
+.topbar-theme-swatch span {
   display: block;
 }
-.theme-fab-icon {
-  font-size: 14px;
+
+/* Dropdown panel — anchored to topbar button */
+.topbar-theme-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 200;
+  max-height: min(80vh, 700px);
+  width: min(720px, 96vw);
+  animation: slideDown 180ms cubic-bezier(0.34,1.4,0.64,1);
 }
 
-/* ── Picker overlay ── */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+
+/* ── Picker overlay (keep for potential future use) ── */
 .theme-picker-overlay {
   background: rgba(0,0,0,0.65);
   backdrop-filter: blur(6px);
@@ -3471,49 +3483,61 @@ input[type="date"] {
    Works on top of whatever theme is currently active
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Floating action button ── */
-.theme-fab {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 1000;
+/* ── TopBar theme button (replaces floating FAB) ── */
+.topbar-theme-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px 8px 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  gap: 7px;
+  padding: 6px 10px 6px 8px;
+  background: var(--btn-bg);
+  border: 1.5px solid var(--btn-border);
   border-radius: 999px;
-  box-shadow: var(--shadow-lg);
   cursor: pointer;
-  transition: transform 120ms, box-shadow 120ms, background 120ms;
-  user-select: none;
+  transition: background 120ms, border-color 120ms, transform 80ms, box-shadow 120ms;
+  box-shadow: 0 1px 4px var(--btn-shadow, rgba(0,0,0,0.3));
+  min-height: 36px;
+  white-space: nowrap;
+  z-index: 201;
+  position: relative;
 }
-.theme-fab:hover {
-  background: var(--surface-3);
-  transform: scale(1.05);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+.topbar-theme-btn:hover {
+  background: var(--btn-bg-hover);
+  border-color: var(--btn-border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px var(--btn-shadow, rgba(0,0,0,0.35));
 }
-.theme-fab:active { transform: scale(0.97); }
+.topbar-theme-btn:active { transform: scale(0.97); }
 
-.theme-fab-swatch {
+.topbar-theme-swatch {
   display: flex;
-  width: 28px;
-  height: 20px;
+  width: 32px;
+  height: 18px;
   border-radius: 999px;
   overflow: hidden;
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--btn-border-hover);
   flex-shrink: 0;
 }
-.theme-fab-swatch span {
-  flex: 1;
+.topbar-theme-swatch span {
   display: block;
 }
-.theme-fab-icon {
-  font-size: 14px;
+
+/* Dropdown panel — anchored to topbar button */
+.topbar-theme-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 200;
+  max-height: min(80vh, 700px);
+  width: min(720px, 96vw);
+  animation: slideDown 180ms cubic-bezier(0.34,1.4,0.64,1);
 }
 
-/* ── Picker overlay ── */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+
+/* ── Picker overlay (keep for potential future use) ── */
 .theme-picker-overlay {
   background: rgba(0,0,0,0.65);
   backdrop-filter: blur(6px);
