@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { watchSettledOrders } from '../lib/data';
 import Modal from './Modal';
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
@@ -761,8 +760,45 @@ function OrderDetailModal({ order, onClose }) {
     ? `Table ${order.tableNumber || order.tableId.replace('t','')}`
     : (order.customer?.name || order.customerName || 'Takeaway');
 
+  const [resendEmail, setResendEmail] = useState(order.customer?.email || '');
+  const [resendPhone, setResendPhone] = useState(order.customer?.phone || '');
+  const [resendStatus, setResendStatus] = useState('idle'); // idle | sending | sent | error
+  const [resendMsg,   setResendMsg]   = useState('');
+
+  const handleResend = async () => {
+    if (!resendEmail.trim() && !resendPhone.trim()) return;
+    setResendStatus('sending');
+    setResendMsg('');
+    try {
+      const { resendReceipt } = await import('../lib/data');
+      await resendReceipt(order.id, {
+        name:  order.customer?.name || order.customerName || '',
+        email: resendEmail.trim(),
+        phone: resendPhone.trim()
+      });
+      setResendStatus('sent');
+      setResendMsg(`Receipt queued — will deliver to ${[resendEmail, resendPhone].filter(Boolean).join(' and ')}`);
+    } catch (e) {
+      setResendStatus('error');
+      setResendMsg(e.message || 'Failed to queue receipt');
+    }
+  };
+
+  const deliveryBadge = order.receiptDelivery ? (
+    <span style={{
+      fontSize: 12, padding: '3px 10px', borderRadius: 999,
+      background: order.receiptDelivery.status === 'delivered' ? 'var(--green-deep)' : 'var(--amber-deep)',
+      color:      order.receiptDelivery.status === 'delivered' ? 'var(--green)' : 'var(--amber)'
+    }}>
+      {order.receiptDelivery.status === 'delivered'
+        ? `✅ Receipt sent via ${[order.receiptDelivery.email === 'sent' && '📧', order.receiptDelivery.sms === 'sent' && '💬'].filter(Boolean).join(' ')}`
+        : `Receipt: ${order.receiptDelivery.status}`}
+    </span>
+  ) : null;
+
   return (
     <Modal title={`${label} · ${fmtDateTime(order.paidAt)}`} onClose={onClose}>
+      {/* Status badges */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-2)' }}>
           {order.tableId ? 'Dine-in' : typeLabel(order.orderType || 'takeaway')}
@@ -772,13 +808,12 @@ function OrderDetailModal({ order, onClose }) {
             📧 {order.customer.email}
           </span>
         )}
-        {order.receiptDelivery && (
-          <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 999,
-            background: order.receiptDelivery.status === 'delivered' ? 'var(--green-deep)' : 'var(--amber-deep)',
-            color: order.receiptDelivery.status === 'delivered' ? 'var(--green)' : 'var(--amber)' }}>
-            {order.receiptDelivery.status === 'delivered' ? '✓ Receipt sent' : `Receipt: ${order.receiptDelivery.status}`}
+        {order.customer?.phone && (
+          <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 999, background: 'var(--blue-deep)', color: 'var(--blue)' }}>
+            💬 {order.customer.phone}
           </span>
         )}
+        {deliveryBadge}
       </div>
 
       {/* Items */}
@@ -820,18 +855,67 @@ function OrderDetailModal({ order, onClose }) {
 
       {/* Payments */}
       {order.payments?.length > 0 && (
-        <div style={{ paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+        <div style={{ paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
           <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 }}>Payments</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {order.payments.map((p, i) => (
-              <span key={i} className="payment-chip" style={{ textTransform: 'capitalize' }}>
-                {p.method} {fmtAUD(p.amount)}
-                {p.last4 && ` ····${p.last4}`}
+              <span key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 10px', borderRadius: 999, textTransform: 'capitalize' }}>
+                {p.method} {fmtAUD(p.amount)}{p.last4 ? ` ····${p.last4}` : ''}
               </span>
             ))}
           </div>
         </div>
       )}
+
+      {/* ── Resend receipt ── */}
+      <div style={{ marginTop: 16, background: 'var(--bg-2)', borderRadius: 'var(--radius)', padding: '16px' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          📨 Send / Resend receipt
+          <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-3)' }}>— edit contact if needed</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label style={{ fontSize: 11 }}>📧 Email</label>
+            <input
+              type="email"
+              value={resendEmail}
+              onChange={e => setResendEmail(e.target.value)}
+              placeholder="customer@email.com"
+              style={{ fontSize: 13 }}
+              disabled={resendStatus === 'sending'}
+            />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label style={{ fontSize: 11 }}>💬 Mobile</label>
+            <input
+              type="tel"
+              value={resendPhone}
+              onChange={e => setResendPhone(e.target.value)}
+              placeholder="04xx xxx xxx"
+              style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}
+              disabled={resendStatus === 'sending'}
+            />
+          </div>
+        </div>
+        {resendMsg && (
+          <div style={{
+            fontSize: 12, marginBottom: 10, padding: '7px 12px', borderRadius: 6,
+            background: resendStatus === 'sent' ? 'var(--green-deep)' : 'var(--red-deep)',
+            color:      resendStatus === 'sent' ? 'var(--green)' : 'var(--red)',
+            border: `1px solid ${resendStatus === 'sent' ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}`
+          }}>
+            {resendStatus === 'sent' ? '✅ ' : '❌ '}{resendMsg}
+          </div>
+        )}
+        <button
+          className="btn btn-primary btn-sm"
+          style={{ width: '100%' }}
+          disabled={(!resendEmail.trim() && !resendPhone.trim()) || resendStatus === 'sending'}
+          onClick={handleResend}
+        >
+          {resendStatus === 'sending' ? '⏳ Sending…' : resendStatus === 'sent' ? '✅ Sent — send again?' : '📨 Send receipt'}
+        </button>
+      </div>
     </Modal>
   );
 }

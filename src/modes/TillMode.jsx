@@ -267,52 +267,63 @@ export default function TillMode() {
 
   const handlePaid = async (payments, customer) => {
     if (!activeOrder) return;
-
     const total = activeOrder.total || 0;
+    const orderId = activeOrder.id;
 
-    // 1. Persist customer (if provided) so we can market to them later
+    // 1. Persist customer
     if (customer?.email || customer?.phone) {
-      try {
-        await upsertCustomer(customer);
-      } catch (e) {
-        // non-fatal
-        console.warn('Customer upsert failed', e);
-      }
+      try { await upsertCustomer(customer); } catch (e) { console.warn('Customer upsert:', e); }
     }
 
-    // 2. Settle the order, attaching customer + payments
-    await settleOrder(activeOrder.id, payments, total, customer || null);
+    // 2. Settle order
+    await settleOrder(orderId, payments, total, customer || null);
 
-    // 3. Queue receipt delivery if customer gave contact details + opted in
-    let receiptQueued = false;
-    if (customer && (customer.email || customer.phone) && customer.receiptOptIn !== false) {
-      try {
-        await queueReceiptDelivery(activeOrder.id, customer);
-        receiptQueued = true;
-      } catch (e) {
-        console.warn('Receipt queue failed', e);
-      }
-    }
+    // 3. Free table
+    if (activeOrder.tableId) await updateTableStatus(activeOrder.tableId, 'free');
 
-    // 4. Free dine-in table if linked
-    if (activeOrder.tableId) {
-      await updateTableStatus(activeOrder.tableId, 'free');
-    }
-
+    // 4. Clear UI immediately so the cashier can move on
     setCart([]);
     setActiveOrderId(null);
     setShowPay(false);
 
-    if (receiptQueued) {
+    // 5. Queue receipt delivery + show live status toast
+    if (customer && (customer.email || customer.phone) && customer.receiptOptIn !== false) {
       const channels = [
         customer.email ? '📧 email' : null,
         customer.phone ? '💬 SMS' : null
       ].filter(Boolean).join(' + ');
-      showToast(`Paid $${total.toFixed(2)} · Receipt sent via ${channels}`);
-    } else if (customer && (customer.email || customer.phone)) {
-      showToast(`Paid $${total.toFixed(2)} · Customer saved (no receipt sent)`);
+
+      showToast(`💰 Paid $${total.toFixed(2)} — queuing receipt via ${channels}…`, 'info');
+
+      try {
+        const deliveryId = await queueReceiptDelivery(orderId, customer);
+
+        // Watch the delivery doc for status — update toast when done
+        if (deliveryId) {
+          const unsub = watchReceiptDelivery(deliveryId, (delivery) => {
+            if (delivery.status === 'delivered') {
+              showToast(`✅ Receipt delivered via ${channels}`, 'success');
+              unsub();
+            } else if (delivery.status === 'partial') {
+              showToast(`⚠️ Receipt partially sent — check Reports for details`, 'warning');
+              unsub();
+            } else if (delivery.status === 'failed' || delivery.status === 'error') {
+              showToast(`❌ Receipt failed to send — resend from Reports`, 'error');
+              unsub();
+            } else if (delivery.status === 'no_channels_configured') {
+              showToast(`⚙️ Receipt queued — deploy Cloud Function to send`, 'warning');
+              unsub();
+            }
+          });
+          // Safety: unsub after 60s regardless
+          setTimeout(unsub, 60_000);
+        }
+      } catch (e) {
+        console.warn('Receipt queue failed:', e);
+        showToast(`💰 Paid $${total.toFixed(2)} — could not queue receipt`, 'error');
+      }
     } else {
-      showToast(`Paid $${total.toFixed(2)}`);
+      showToast(`💰 Paid $${total.toFixed(2)}`);
     }
   };
 
@@ -1184,130 +1195,213 @@ function VoucherRedeemDialog({ balance, orderTotal, onCancel, onApplied }) {
 }
 
 // ── Customer capture screen ──────────────────────────────────────────────
-function CustomerCaptureScreen({ total, change, customer, onChange, onBack, onSend, onSkip }) {
-  const hasContact = customer.email.trim() || customer.phone.trim();
-  const receiptOptIn = customer.receiptOptIn !== false; // default true
+function CustomerCaptureScreen({ total, change, payments, customer, onChange, onBack, onSend, onSkip }) {
+  const hasEmail   = customer.email.trim().length > 0;
+  const hasPhone   = customer.phone.trim().length > 0;
+  const hasContact = hasEmail || hasPhone;
+  const receiptOptIn = customer.receiptOptIn !== false;
 
-  const channels = [
-    customer.email.trim() ? '📧 email' : null,
-    customer.phone.trim() ? '💬 SMS' : null
-  ].filter(Boolean);
+  const emailValid = !hasEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim());
+  const phoneValid = !hasPhone || customer.phone.replace(/\D/g,'').length >= 8;
+  const canSend    = hasContact && receiptOptIn && emailValid && phoneValid;
 
   return (
     <div className="pay-screen">
-      <div className="pay-card">
-        <div className="pay-head">
-          <h2>Customer details</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div className="pay-card" style={{ maxWidth: 520 }}>
+
+        {/* ── Header ── */}
+        <div className="pay-head" style={{ background: 'var(--green-deep)', borderBottom: '1px solid rgba(74,222,128,0.25)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 22 }}>✅</span>
+              <h2 style={{ color: 'var(--green)', margin: 0 }}>Payment complete</h2>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', marginLeft: 32 }}>
+              Send a digital receipt to the customer
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <div className="total" style={{ color: 'var(--green)' }}>${total.toFixed(2)}</div>
             {change > 0 && (
-              <span style={{ background: 'var(--amber-deep)', color: 'var(--amber)', padding: '6px 14px', borderRadius: 999, fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+              <span style={{ background: 'var(--amber-deep)', color: 'var(--amber)', padding: '3px 10px', borderRadius: 999, fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                 Change ${change.toFixed(2)}
               </span>
             )}
-            <div className="total" style={{ color: 'var(--green)' }}>✓ Paid</div>
           </div>
         </div>
 
-        <div className="pay-body" style={{ gridTemplateColumns: '1fr', padding: '28px 32px' }}>
-          <div style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: 14, marginBottom: 22 }}>
-            Send a digital receipt and save to customer database.
-            <br />
-            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-              Provide email for a full HTML receipt · mobile for SMS confirmation.
-            </span>
+        <div className="pay-body" style={{ gridTemplateColumns: '1fr', padding: '24px 28px', gap: 16 }}>
+
+          {/* ── Channel selector — tap to enable ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {/* Email channel */}
+            <div style={{
+              border: `2px solid ${hasEmail && receiptOptIn ? 'var(--brand)' : 'var(--border)'}`,
+              borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+              background: hasEmail && receiptOptIn
+                ? 'color-mix(in srgb, var(--brand) 10%, var(--surface))'
+                : 'var(--surface-2)',
+              transition: 'all 150ms'
+            }}>
+              <div style={{ padding: '10px 14px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 18 }}>📧</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: hasEmail ? 'var(--brand)' : 'var(--text-2)' }}>
+                  Email receipt
+                </span>
+                {hasEmail && emailValid && receiptOptIn && (
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--green)', fontWeight: 700 }}>✓</span>
+                )}
+              </div>
+              <div style={{ padding: '0 10px 12px' }}>
+                <input
+                  type="email"
+                  value={customer.email}
+                  onChange={e => onChange({ ...customer, email: e.target.value })}
+                  placeholder="customer@email.com"
+                  style={{
+                    fontSize: 13, padding: '8px 10px',
+                    borderColor: hasEmail && !emailValid ? 'var(--red)' : undefined
+                  }}
+                />
+                {hasEmail && !emailValid && (
+                  <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 3, paddingLeft: 2 }}>
+                    Please enter a valid email
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 5, paddingLeft: 2 }}>
+                  Full HTML tax invoice PDF
+                </div>
+              </div>
+            </div>
+
+            {/* SMS channel */}
+            <div style={{
+              border: `2px solid ${hasPhone && receiptOptIn ? 'var(--blue)' : 'var(--border)'}`,
+              borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+              background: hasPhone && receiptOptIn
+                ? 'color-mix(in srgb, var(--blue) 10%, var(--surface))'
+                : 'var(--surface-2)',
+              transition: 'all 150ms'
+            }}>
+              <div style={{ padding: '10px 14px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 18 }}>💬</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: hasPhone ? 'var(--blue)' : 'var(--text-2)' }}>
+                  SMS receipt
+                </span>
+                {hasPhone && phoneValid && receiptOptIn && (
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--green)', fontWeight: 700 }}>✓</span>
+                )}
+              </div>
+              <div style={{ padding: '0 10px 12px' }}>
+                <input
+                  type="tel"
+                  value={customer.phone}
+                  onChange={e => onChange({ ...customer, phone: e.target.value })}
+                  placeholder="04xx xxx xxx"
+                  style={{
+                    fontSize: 13, padding: '8px 10px',
+                    fontFamily: 'var(--font-mono)',
+                    borderColor: hasPhone && !phoneValid ? 'var(--red)' : undefined
+                  }}
+                />
+                {hasPhone && !phoneValid && (
+                  <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 3, paddingLeft: 2 }}>
+                    Enter a valid mobile number
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 5, paddingLeft: 2 }}>
+                  Text confirmation + total
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="field">
-            <label>Name (optional)</label>
+          {/* ── Customer name ── */}
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>Customer name <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>(optional — shown on receipt)</span></label>
             <input
-              autoFocus
               value={customer.name}
               onChange={e => onChange({ ...customer, name: e.target.value })}
               placeholder="e.g. Priya Sharma"
             />
           </div>
 
-          <div className="field-row">
-            <div className="field">
-              <label>Email</label>
-              <input
-                type="email"
-                value={customer.email}
-                onChange={e => onChange({ ...customer, email: e.target.value })}
-                placeholder="name@example.com"
-              />
-            </div>
-            <div className="field">
-              <label>Mobile</label>
-              <input
-                type="tel"
-                value={customer.phone}
-                onChange={e => onChange({ ...customer, phone: e.target.value })}
-                placeholder="04xx xxx xxx"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              />
-            </div>
-          </div>
-
-          {/* Receipt opt-in */}
+          {/* ── Opt-out toggle — only show if contact entered ── */}
           {hasContact && (
             <div
               onClick={() => onChange({ ...customer, receiptOptIn: !receiptOptIn })}
               style={{
                 display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
-                background: receiptOptIn ? 'var(--green-deep)' : 'var(--surface-2)',
-                border: `1px solid ${receiptOptIn ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                background: receiptOptIn ? 'var(--green-deep)' : 'var(--surface-3)',
+                border: `1.5px solid ${receiptOptIn ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
                 borderRadius: 'var(--radius)', padding: '12px 16px',
                 transition: 'all 120ms', userSelect: 'none'
               }}
             >
-              <span style={{
-                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+              <div style={{
+                width: 24, height: 24, borderRadius: 6, flexShrink: 0,
                 border: `2px solid ${receiptOptIn ? 'var(--green)' : 'var(--border-strong)'}`,
                 background: receiptOptIn ? 'var(--green)' : 'transparent',
-                display: 'grid', placeItems: 'center', fontSize: 13, color: '#0a1f12', fontWeight: 700
+                display: 'grid', placeItems: 'center', fontSize: 14,
+                color: '#0a1f12', fontWeight: 800, transition: 'all 120ms'
               }}>
                 {receiptOptIn ? '✓' : ''}
-              </span>
-              <div>
+              </div>
+              <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: receiptOptIn ? 'var(--green)' : 'var(--text-2)' }}>
-                  {receiptOptIn ? `Send receipt via ${channels.join(' + ')}` : 'Don\'t send receipt'}
+                  {receiptOptIn
+                    ? `Send receipt via ${[hasEmail && '📧 email', hasPhone && '💬 SMS'].filter(Boolean).join(' + ')}`
+                    : 'Do not send receipt'}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
                   {receiptOptIn
-                    ? 'Tax invoice · customer details saved to database'
-                    : 'Customer details will still be saved for marketing'}
+                    ? 'Customer details saved to marketing database'
+                    : 'Customer details will still be saved'}
                 </div>
               </div>
             </div>
           )}
 
+          {/* ── Order summary strip ── */}
           <div style={{
-            background: 'var(--bg-2)', borderRadius: 8, padding: 12,
-            fontSize: 12, color: 'var(--text-3)', lineHeight: 1.6, marginTop: 4
+            background: 'var(--bg-2)', borderRadius: 8, padding: '10px 14px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            fontSize: 13
           }}>
-            Total: <b style={{ color: 'var(--brand)' }}>${total.toFixed(2)}</b>
-            {hasContact && receiptOptIn && channels.length > 0 && (
-              <span style={{ color: 'var(--green)', marginLeft: 8 }}>
-                · Receipt will be sent to {channels.join(' and ')}
-              </span>
-            )}
+            <div style={{ color: 'var(--text-3)' }}>
+              {(payments || []).map(p => (
+                <span key={p.ts} style={{ marginRight: 10 }}>
+                  <span style={{ textTransform: 'capitalize' }}>{p.method}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', marginLeft: 4 }}>${p.amount.toFixed(2)}</span>
+                </span>
+              ))}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--brand)', fontSize: 15 }}>
+              ${total.toFixed(2)}
+            </div>
           </div>
         </div>
 
-        <div className="pay-foot" style={{ justifyContent: 'space-between' }}>
-          <button className="btn-ghost" onClick={onBack}>← Payment</button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn" onClick={onSkip}>Skip</button>
+        {/* ── Footer actions ── */}
+        <div className="pay-foot" style={{ justifyContent: 'space-between', gap: 10 }}>
+          <button className="btn-ghost" onClick={onBack} style={{ flexShrink: 0 }}>← Back</button>
+          <div style={{ display: 'flex', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+            <button className="btn btn-sm" onClick={onSkip} style={{ flexShrink: 0 }}>
+              Skip
+            </button>
             <button
               className="btn btn-primary"
-              disabled={!hasContact}
-              style={{ opacity: hasContact ? 1 : 0.4 }}
               onClick={onSend}
+              disabled={hasContact && receiptOptIn && !canSend}
+              style={{ flex: 1, maxWidth: 240, opacity: (hasContact && receiptOptIn && !canSend) ? 0.4 : 1 }}
             >
-              {hasContact && receiptOptIn
-                ? `Send receipt & finish`
-                : 'Save customer & finish'}
+              {!hasContact
+                ? 'Finish without receipt'
+                : !receiptOptIn
+                ? 'Save & finish'
+                : canSend
+                ? `📨 Send receipt & finish`
+                : 'Fix errors above'}
             </button>
           </div>
         </div>
