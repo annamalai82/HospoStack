@@ -1,3 +1,4 @@
+import GeofenceGate from './components/GeofenceGate';
 import { useEffect, useState } from 'react';
 import { DeviceProvider, useDevice } from './context/DeviceContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -84,18 +85,23 @@ service cloud.firestore {
 
   // Force re-configuration for older devices that don't have a venue binding
   if (!device || !device.venueId) return <ConfigScreen />;
-  if (!device.user) return <PinScreen />;
 
+  // Geofence gate applies to BOTH the PIN screen and the app modes.
+  // It checks the device's location against the venue's geofence settings.
   return (
-    <div className="app app--with-bg">
-      <TopBar />
-      <main>
-        {device.mode === 'kitchen' && <KitchenMode />}
-        {device.mode === 'floor' && <FloorMode />}
-        {device.mode === 'till' && <TillMode />}
-        {device.mode === 'config' && <ConfigMode />}
-      </main>
-    </div>
+    <GeofenceGate>
+      {!device.user ? <PinScreen /> : (
+        <div className="app app--with-bg">
+          <TopBar />
+          <main>
+            {device.mode === 'kitchen' && <KitchenMode />}
+            {device.mode === 'floor' && <FloorMode />}
+            {device.mode === 'till' && <TillMode />}
+            {device.mode === 'config' && <ConfigMode />}
+          </main>
+        </div>
+      )}
+    </GeofenceGate>
   );
 }
 

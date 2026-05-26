@@ -8,6 +8,7 @@ import {
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
+import DiscountModal from '../components/DiscountModal';
 
 /**
  * Till POS flow (two-step):
@@ -33,6 +34,11 @@ export default function TillMode() {
   const [pausedPayments, setPausedPayments] = useState([]); // payments preserved while editing
   const [toast, setToast] = useState(null);
   const [venue, setVenue] = useState(null);
+
+  // ── Discount & surcharge state (per-order, not persisted across orders) ──
+  const [discount, setDiscount] = useState(null);      // { type:'pct'|'amount', value, reason }
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [phSurchargeOn, setPhSurchargeOn] = useState(false); // public holiday toggle
   const [tick, setTick] = useState(0);
 
   const venueId = device?.venueId;
@@ -71,6 +77,45 @@ export default function TillMode() {
     }
   }, [orders, optimisticOrder]);
   const activeOrder = activeOrderFromList || (optimisticOrder?.id === activeOrderId ? optimisticOrder : null);
+
+  // ── Computed surcharge ─────────────────────────────────────────────────
+  // Auto-add Sunday surcharge if enabled + today is Sunday.
+  // Public holiday surcharge is opt-in via the PH toggle in the topbar.
+  // Card surcharge handled separately at payment time (added per payment).
+  const { effectiveSurchargePct, surchargeLabel } = useMemo(() => {
+    const parts = [];
+    let pct = 0;
+    if (venue?.sundaySurchargeEnabled && new Date().getDay() === 0) {
+      pct += venue.sundaySurchargePct || 10;
+      parts.push(`Sunday ${venue.sundaySurchargePct || 10}%`);
+    }
+    if (venue?.publicHolidaySurchargeEnabled && phSurchargeOn) {
+      pct += venue.publicHolidaySurchargePct || 15;
+      parts.push(`PH ${venue.publicHolidaySurchargePct || 15}%`);
+    }
+    return {
+      effectiveSurchargePct: pct,
+      surchargeLabel: parts.join(' + '),
+    };
+  }, [venue, phSurchargeOn]);
+
+  // When the active order changes, sync the discount state from Firestore
+  // (so editing an order with an existing discount preserves it).
+  useEffect(() => {
+    if (activeOrder?.discount) {
+      setDiscount(activeOrder.discount);
+    } else {
+      setDiscount(null);
+    }
+  }, [activeOrderId, activeOrder?.discount]);
+
+  // Helper: compute totals for any item list using the CURRENT discount + surcharge.
+  // Use this everywhere instead of calcTotals(items) directly.
+  const totals = (items) => calcTotals(items, {
+    discount,
+    surchargePct: effectiveSurchargePct,
+    gstPct: venue?.gstPct ?? 10,
+  });
 
   // ── Cart ops ─────────────────────────────────────────────────────────
   const addToCart = (item) => {
@@ -118,8 +163,8 @@ export default function TillMode() {
     const items = [...(activeOrder.items || [])];
     if (sentIndex < 0 || sentIndex >= items.length) return;
     items[sentIndex] = { ...items[sentIndex], qty: newQty };
-    const totals = calcTotals(items);
-    await updateOrder(activeOrder.id, { items, ...totals });
+    const t = totals(items);
+    await updateOrder(activeOrder.id, { items, ...t });
   };
 
   const removeSentItem = async (sentIndex) => {
@@ -131,8 +176,8 @@ export default function TillMode() {
       showToast('Order removed');
       return;
     }
-    const totals = calcTotals(items);
-    await updateOrder(activeOrder.id, { items, ...totals });
+    const t = totals(items);
+    await updateOrder(activeOrder.id, { items, ...t });
   };
 
   // ── Send to Kitchen (step 1) ────────────────────────────────────────
@@ -153,12 +198,12 @@ export default function TillMode() {
       if (activeOrder) {
         // Appending to existing order — preserve table/customer info
         const items = [...(activeOrder.items || []), ...sentCart];
-        const totals = calcTotals(items);
-        await sendOrderToKitchen(activeOrder.id, items, totals);
+        const t = totals(items);
+        await sendOrderToKitchen(activeOrder.id, items, t);
         showToast(`+${cart.length} item${cart.length === 1 ? '' : 's'} sent to kitchen`);
       } else {
         // New order — atomic create+send so we never leave an orphan empty order
-        const totals = calcTotals(sentCart);
+        const t = totals(sentCart);
         const isDineIn = orderType === 'dine-in-pickup';
         const tbl = isDineIn ? tables.find(t => t.id === pendingTableId) : null;
         const newOrderMeta = {
@@ -168,7 +213,7 @@ export default function TillMode() {
           orderType,
           openedBy: device.user.id
         };
-        const orderId = await createAndSendOrder(newOrderMeta, sentCart, totals);
+        const orderId = await createAndSendOrder(newOrderMeta, sentCart, t);
         // Mark table as ordering
         if (tbl) await updateTableStatus(tbl.id, 'ordering');
         // Optimistic local copy so the UI doesn't blank while Firestore catches up
@@ -176,7 +221,7 @@ export default function TillMode() {
           id: orderId,
           ...newOrderMeta,
           items: sentCart,
-          ...totals,
+          ...t,
           status: 'sent',
           openedAt: { toMillis: () => Date.now() },
           sentAt: { toMillis: () => Date.now() }
@@ -204,12 +249,12 @@ export default function TillMode() {
       return showToast('Enter a customer name for takeaway', 'error');
     }
     const sentCart = cart.map(l => ({ ...l, status: 'sent' }));
-    const totals = calcTotals(sentCart);
+    const t = totals(sentCart);
 
     try {
       if (activeOrder) {
         const items = [...(activeOrder.items || []), ...sentCart];
-        const newTotals = calcTotals(items);
+        const newTotals = totals(items);
         await sendOrderToKitchen(activeOrder.id, items, newTotals);
         setCart([]);
         setShowPay(true);
@@ -223,13 +268,13 @@ export default function TillMode() {
           orderType,
           openedBy: device.user.id
         };
-        const orderId = await createAndSendOrder(newOrderMeta, sentCart, totals);
+        const orderId = await createAndSendOrder(newOrderMeta, sentCart, t);
         if (tbl) await updateTableStatus(tbl.id, 'ordering');
         setOptimisticOrder({
           id: orderId,
           ...newOrderMeta,
           items: sentCart,
-          ...totals,
+          ...t,
           status: 'sent',
           openedAt: { toMillis: () => Date.now() },
           sentAt: { toMillis: () => Date.now() }
@@ -379,6 +424,16 @@ export default function TillMode() {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {venue?.publicHolidaySurchargeEnabled && (
+            <button
+              className={`btn-sm ${phSurchargeOn ? 'btn btn-primary' : 'btn'}`}
+              onClick={() => setPhSurchargeOn(v => !v)}
+              title={phSurchargeOn ? 'Public holiday surcharge ON' : 'Click to add public holiday surcharge'}
+              style={{ fontSize: 11 }}
+            >
+              🎉 PH {venue.publicHolidaySurchargePct}% {phSurchargeOn ? '✓' : ''}
+            </button>
+          )}
           {activeOrder && (
             <button className="btn btn-danger btn-sm" onClick={() => setShowVoidConfirm(true)}>🚫 Void</button>
           )}
@@ -511,7 +566,7 @@ export default function TillMode() {
           className="btn btn-success btn-lg btn-block"
           onClick={handleSendAndPay}
         >
-          💳 Send + Pay Now · ${calcTotals(cart).total.toFixed(2)}
+          💳 Send + Pay Now · ${totals(cart).total.toFixed(2)}
         </button>
       )}
     </div>
@@ -535,6 +590,12 @@ export default function TillMode() {
           onSentNoteChange={updateSentNote}
           header={headerContent}
           footer={footerContent}
+          gstPct={venue?.gstPct ?? 10}
+          discount={discount}
+          surchargePct={effectiveSurchargePct}
+          surchargeLabel={surchargeLabel}
+          onApplyDiscount={() => setShowDiscount(true)}
+          onClearDiscount={() => setDiscount(null)}
         />
 
         <OpenTabsPane
@@ -576,6 +637,15 @@ export default function TillMode() {
           order={activeOrder}
           onCancel={() => setShowVoidConfirm(false)}
           onConfirm={handleVoid}
+        />
+      )}
+
+      {showDiscount && (
+        <DiscountModal
+          subtotal={[...sentItems, ...cart].reduce((s, l) => s + l.price * l.qty, 0)}
+          currentDiscount={discount}
+          onApply={(d) => { setDiscount(d); setShowDiscount(false); }}
+          onClose={() => setShowDiscount(false)}
         />
       )}
     </div>
@@ -1410,11 +1480,29 @@ function CustomerCaptureScreen({ total, change, payments, customer, onChange, on
   );
 }
 
-function calcTotals(items) {
-  const subtotal = items.reduce((s, l) => s + l.price * l.qty, 0);
-  const total = +subtotal.toFixed(2);
-  const gst = +(subtotal * (10 / 110)).toFixed(2);
-  return { subtotal: +subtotal.toFixed(2), gst, total };
+function calcTotals(items, opts = {}) {
+  const { discount = null, surchargePct = 0, gstPct = 10 } = opts;
+
+  const subtotalGross = items.reduce((s, l) => s + l.price * l.qty, 0);
+
+  let discountAmount = 0;
+  if (discount?.type === 'pct')    discountAmount = subtotalGross * (discount.value / 100);
+  if (discount?.type === 'amount') discountAmount = Math.min(discount.value, subtotalGross);
+
+  const afterDiscount = subtotalGross - discountAmount;
+  const surchargeAmount = surchargePct > 0 ? afterDiscount * (surchargePct / 100) : 0;
+  const total = +(afterDiscount + surchargeAmount).toFixed(2);
+  const gst = +(total * (gstPct / (100 + gstPct))).toFixed(2);
+  const subtotal = +(total - gst).toFixed(2);
+
+  return {
+    subtotal, gst, total,
+    subtotalGross: +subtotalGross.toFixed(2),
+    discountAmount: +discountAmount.toFixed(2),
+    surchargeAmount: +surchargeAmount.toFixed(2),
+    discount: discount || null,
+    surchargePct,
+  };
 }
 
 // ── EFTPOS confirm modal — manual Tyro terminal flow ───────────────────

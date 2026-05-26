@@ -15,7 +15,13 @@ export default function OrderPane({
   onSentNoteChange, // (sentIndex, note) — update note on a sent item
   header,
   footer,
-  gstPct = 10
+  gstPct = 10,
+  // Discount + surcharge applied to the whole order
+  discount = null,       // { type: 'pct'|'amount', value: number, reason?: string }
+  surchargePct = 0,      // total surcharge percentage
+  surchargeLabel = '',   // e.g. 'Sunday 10%' or 'Public Holiday 15%'
+  onApplyDiscount,       // fn() to open discount modal
+  onClearDiscount,       // fn() to clear discount
 }) {
   const [cats, setCats] = useState([]);
   const [items, setItems] = useState([]);
@@ -58,9 +64,23 @@ export default function OrderPane({
   }, [items, activeCat, search]);
 
   const allLines = [...sentItems.map(i => ({ ...i, _sent: true })), ...cartItems];
-  const subtotal = allLines.reduce((s, l) => s + l.price * l.qty, 0);
-  const gst = +(subtotal * (gstPct / (100 + gstPct))).toFixed(2);
-  const total = +subtotal.toFixed(2);
+  const subtotalGross = allLines.reduce((s, l) => s + l.price * l.qty, 0);
+
+  // Compute discount amount applied to subtotal
+  let discountAmount = 0;
+  if (discount?.type === 'pct')    discountAmount = +(subtotalGross * (discount.value / 100)).toFixed(2);
+  if (discount?.type === 'amount') discountAmount = +Math.min(discount.value, subtotalGross).toFixed(2);
+
+  // Subtotal after discount, then surcharge added on top
+  const afterDiscount = +(subtotalGross - discountAmount).toFixed(2);
+  const surchargeAmount = surchargePct > 0
+    ? +(afterDiscount * (surchargePct / 100)).toFixed(2)
+    : 0;
+
+  const total = +(afterDiscount + surchargeAmount).toFixed(2);
+  const gst = +(total * (gstPct / (100 + gstPct))).toFixed(2);
+  const subtotal = total; // back-compat for any downstream readers
+
   const itemCount = cartItems.reduce((n, l) => n + l.qty, 0)
                   + sentItems.reduce((n, l) => n + l.qty, 0);
 
@@ -152,9 +172,66 @@ export default function OrderPane({
         ) : allLines.map((line, i) => makeCartRow(line, i))}
       </div>
       <div className="cart-totals">
-        <div className="line"><span>Subtotal (ex GST)</span><span>${(total - gst).toFixed(2)}</span></div>
-        <div className="line"><span>GST ({gstPct}%)</span><span>${gst.toFixed(2)}</span></div>
+        <div className="line" style={{ color: 'var(--text-3)' }}>
+          <span>Subtotal</span>
+          <span>${subtotalGross.toFixed(2)}</span>
+        </div>
+
+        {discount && discountAmount > 0 && (
+          <div className="line" style={{ color: 'var(--green)' }}>
+            <span>
+              − Discount
+              <span style={{ fontSize: 10, marginLeft: 6, fontWeight: 400, color: 'var(--text-3)' }}>
+                {discount.type === 'pct' ? `${discount.value}%` : 'flat'}
+                {discount.reason ? ` · ${discount.reason}` : ''}
+              </span>
+              {onClearDiscount && (
+                <button
+                  onClick={onClearDiscount}
+                  style={{
+                    marginLeft: 6, padding: 0, border: 'none', background: 'transparent',
+                    color: 'var(--text-3)', cursor: 'pointer', fontSize: 14, lineHeight: 1
+                  }}
+                  title="Remove discount"
+                >×</button>
+              )}
+            </span>
+            <span>−${discountAmount.toFixed(2)}</span>
+          </div>
+        )}
+
+        {surchargePct > 0 && surchargeAmount > 0 && (
+          <div className="line" style={{ color: 'var(--amber)' }}>
+            <span>
+              + Surcharge
+              <span style={{ fontSize: 10, marginLeft: 6, fontWeight: 400, color: 'var(--text-3)' }}>
+                {surchargeLabel || `${surchargePct}%`}
+              </span>
+            </span>
+            <span>+${surchargeAmount.toFixed(2)}</span>
+          </div>
+        )}
+
+        <div className="line" style={{ color: 'var(--text-3)', fontSize: 12, paddingTop: 4, borderTop: '1px dashed var(--border)' }}>
+          <span>Subtotal (ex GST)</span>
+          <span>${(total - gst).toFixed(2)}</span>
+        </div>
+        <div className="line" style={{ color: 'var(--text-3)', fontSize: 12 }}>
+          <span>GST ({gstPct}%)</span>
+          <span>${gst.toFixed(2)}</span>
+        </div>
         <div className="line total"><span>Total</span><span>${total.toFixed(2)}</span></div>
+
+        {onApplyDiscount && allLines.length > 0 && !discount && (
+          <button
+            className="btn-ghost"
+            onClick={onApplyDiscount}
+            style={{
+              marginTop: 8, fontSize: 12, justifyContent: 'center', width: '100%',
+              borderTop: '1px dashed var(--border)', borderRadius: 0, paddingTop: 10
+            }}
+          >🏷 Apply discount</button>
+        )}
       </div>
       {footer}
     </>
@@ -238,9 +315,36 @@ export default function OrderPane({
                 ) : allLines.map((line, i) => makeCartRow(line, i))}
               </div>
               <div className="cart-totals">
-                <div className="line"><span>Subtotal (ex GST)</span><span>${(total - gst).toFixed(2)}</span></div>
-                <div className="line"><span>GST ({gstPct}%)</span><span>${gst.toFixed(2)}</span></div>
+                <div className="line" style={{ color: 'var(--text-3)' }}>
+                  <span>Subtotal</span>
+                  <span>${subtotalGross.toFixed(2)}</span>
+                </div>
+                {discount && discountAmount > 0 && (
+                  <div className="line" style={{ color: 'var(--green)' }}>
+                    <span>− Discount {discount.type === 'pct' ? `${discount.value}%` : 'flat'}</span>
+                    <span>−${discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {surchargePct > 0 && surchargeAmount > 0 && (
+                  <div className="line" style={{ color: 'var(--amber)' }}>
+                    <span>+ Surcharge {surchargeLabel || `${surchargePct}%`}</span>
+                    <span>+${surchargeAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="line" style={{ color: 'var(--text-3)', fontSize: 12, paddingTop: 4, borderTop: '1px dashed var(--border)' }}>
+                  <span>Subtotal (ex GST)</span>
+                  <span>${(total - gst).toFixed(2)}</span>
+                </div>
+                <div className="line" style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                  <span>GST ({gstPct}%)</span>
+                  <span>${gst.toFixed(2)}</span>
+                </div>
                 <div className="line total"><span>Total</span><span>${total.toFixed(2)}</span></div>
+                {onApplyDiscount && allLines.length > 0 && !discount && (
+                  <button className="btn-ghost" onClick={onApplyDiscount} style={{ marginTop: 8, fontSize: 12, justifyContent: 'center', width: '100%' }}>
+                    🏷 Apply discount
+                  </button>
+                )}
               </div>
               <div className="mobile-cart-actions">
                 <button className="btn btn-block" style={{ background: 'var(--surface-3)', marginBottom: 8 }} onClick={() => setCartOpen(false)}>

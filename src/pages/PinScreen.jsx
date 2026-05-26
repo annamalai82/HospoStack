@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useDevice } from '../context/DeviceContext';
-import { findUserByPin } from '../lib/data';
+import { findUserByPin, getVenue } from '../lib/data';
+import { descriptorDistance } from '../lib/face';
+import FaceCapture from '../components/FaceCapture';
 
 export default function PinScreen() {
   const { device, login, reset } = useDevice();
-  const [pin, setPin] = useState('');
+  const [pin,   setPin]   = useState('');
   const [error, setError] = useState('');
+  const [pendingUser, setPendingUser] = useState(null);  // user who passed PIN, awaiting face check
+  const [faceRequired, setFaceRequired] = useState(false);
+
+  // Load venue settings to know if face check is required
+  useEffect(() => {
+    getVenue().then(v => setFaceRequired(!!v?.faceAuthEnabled));
+  }, []);
 
   useEffect(() => {
     const onKey = (e) => {
+      if (pendingUser) return;  // disable keypad during face check
       if (e.key >= '0' && e.key <= '9') append(e.key);
       else if (e.key === 'Backspace') back();
       else if (e.key === 'Enter') submit();
@@ -16,7 +26,7 @@ export default function PinScreen() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line
-  }, [pin]);
+  }, [pin, pendingUser]);
 
   const append = (d) => {
     if (pin.length >= 4) return;
@@ -38,8 +48,7 @@ export default function PinScreen() {
         setPin('');
         return;
       }
-      // Role check — kitchen device shouldn't let a waiter log in by accident, etc.
-      // Manager can sign in anywhere.
+      // Role check
       if (user.role !== 'manager') {
         const required = device.mode === 'kitchen' ? 'kitchen'
                        : device.mode === 'floor'   ? 'waiter'
@@ -50,6 +59,23 @@ export default function PinScreen() {
           return;
         }
       }
+
+      // ── Face verification gate ─────────────────────────────────────────
+      // If venue has face auth enabled AND this user has enrolled face data,
+      // require a face match before logging in.
+      if (faceRequired && user.faceDescriptor?.length === 128) {
+        setPendingUser(user);  // open face capture
+        setPin('');
+        return;
+      }
+      // If face auth required but user hasn't enrolled, block with a clear msg
+      if (faceRequired && !user.faceDescriptor) {
+        setError(`${user.name} has no face enrolled. Manager must enroll first.`);
+        setPin('');
+        return;
+      }
+
+      // No face required → log in immediately
       await login(user);
     } catch (e) {
       setError(e.message);
@@ -57,33 +83,75 @@ export default function PinScreen() {
     }
   };
 
+  // ── Handle face capture result ─────────────────────────────────────────
+  const handleFaceCaptured = async (descriptor) => {
+    if (!pendingUser) return;
+    const distance = descriptorDistance(descriptor, pendingUser.faceDescriptor);
+    // Threshold: < 0.55 = match, > 0.60 = clear mismatch
+    if (distance < 0.55) {
+      // Match ✓
+      await login(pendingUser);
+      setPendingUser(null);
+    } else {
+      setError(
+        distance < 0.65
+          ? `Face didn't match (similarity ${((1-distance)*100).toFixed(0)}%). Try again.`
+          : `Face doesn't match ${pendingUser.name}. Try again or use a different PIN.`
+      );
+      setPendingUser(null);
+    }
+  };
+
   return (
-    <div className="pin-screen">
-      <div className="pin-card">
-        <h2>{modeLabel(device.mode)}</h2>
-        <div className="subtitle">{device.deviceName} · Enter your 4-digit PIN</div>
+    <>
+      <div className="pin-screen">
+        <div className="pin-card">
+          <h2>{modeLabel(device.mode)}</h2>
+          <div className="subtitle">
+            {device.deviceName} · Enter your 4-digit PIN
+            {faceRequired && (
+              <span style={{
+                display: 'inline-block', marginLeft: 8, padding: '2px 8px',
+                background: 'var(--brand-deep)', color: 'var(--brand)',
+                borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em',
+              }}>
+                🔒 FACE ID
+              </span>
+            )}
+          </div>
 
-        <div className="pin-dots">
-          {[0, 1, 2, 3].map(i => (
-            <div key={i} className={`pin-dot ${i < pin.length ? 'filled' : ''}`} />
-          ))}
-        </div>
-        <div className="pin-error">{error}</div>
+          <div className="pin-dots">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className={`pin-dot ${i < pin.length ? 'filled' : ''}`} />
+            ))}
+          </div>
+          <div className="pin-error">{error}</div>
 
-        <div className="pin-grid">
-          {['1','2','3','4','5','6','7','8','9'].map(d => (
-            <button key={d} className="pin-key" onClick={() => append(d)}>{d}</button>
-          ))}
-          <button className="pin-key muted" onClick={back}>Del</button>
-          <button className="pin-key" onClick={() => append('0')}>0</button>
-          <button className="pin-key muted" onClick={() => reset()}>Setup</button>
-        </div>
+          <div className="pin-grid">
+            {['1','2','3','4','5','6','7','8','9'].map(d => (
+              <button key={d} className="pin-key" onClick={() => append(d)}>{d}</button>
+            ))}
+            <button className="pin-key muted" onClick={back}>Del</button>
+            <button className="pin-key" onClick={() => append('0')}>0</button>
+            <button className="pin-key muted" onClick={() => reset()}>Setup</button>
+          </div>
 
-        <div className="pin-hint">
-          Demo PINs · Manager <code>1234</code> · Waiter <code>1111</code> · Kitchen <code>2222</code> · Cashier <code>3333</code>
+          <div className="pin-hint">
+            Demo PINs · Manager <code>1234</code> · Waiter <code>1111</code> · Kitchen <code>2222</code> · Cashier <code>3333</code>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Face capture overlay */}
+      {pendingUser && (
+        <FaceCapture
+          mode="verify"
+          userName={pendingUser.name}
+          onCapture={handleFaceCaptured}
+          onCancel={() => { setPendingUser(null); setError(''); }}
+        />
+      )}
+    </>
   );
 }
 

@@ -3,19 +3,21 @@ import {
   watchUsers, createUser, updateUser, deleteUser, pinIsUnique
 } from '../lib/data';
 import Modal from './Modal';
+import FaceCapture from './FaceCapture';
 
 const ROLES = ['manager', 'waiter', 'kitchen', 'cashier'];
 
 export default function UsersPanel() {
   const [users, setUsers] = useState([]);
   const [editing, setEditing] = useState(null); // user obj or { __new: true }
+  const [enrolling, setEnrolling] = useState(null); // user being enrolled
 
   useEffect(() => watchUsers(setUsers), []);
 
   return (
     <>
       <h3>Users & PINs</h3>
-      <p className="subtitle">Manage who can sign in to each device. PINs are 4-digit codes.</p>
+      <p className="subtitle">Manage who can sign in to each device. PINs are 4-digit codes. Enroll face for biometric login.</p>
 
       <div className="section">
         <div className="section-head">
@@ -26,20 +28,27 @@ export default function UsersPanel() {
         </div>
 
         <div className="data-table">
-          <div className="row head" style={{ gridTemplateColumns: '2fr 1fr 90px 80px 110px' }}>
+          <div className="row head" style={{ gridTemplateColumns: '2fr 1fr 70px 70px 80px 130px' }}>
             <div>Name</div>
             <div>Role</div>
             <div>PIN</div>
+            <div>Face</div>
             <div>Status</div>
             <div></div>
           </div>
           {users.map(u => (
-            <div key={u.id} className="row" style={{ gridTemplateColumns: '2fr 1fr 90px 80px 110px' }}>
+            <div key={u.id} className="row" style={{ gridTemplateColumns: '2fr 1fr 70px 70px 80px 130px' }}>
               <div>{u.name}</div>
               <div><span className={`pill ${u.role}`}>{u.role}</span></div>
               <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>••••</div>
+              <div>
+                {u.faceDescriptor?.length === 128
+                  ? <span style={{ color: 'var(--green)', fontSize: 11, fontWeight: 700 }}>✓ Enrolled</span>
+                  : <span style={{ color: 'var(--text-3)', fontSize: 11 }}>—</span>}
+              </div>
               <div><span className={`pill ${u.active ? 'active' : 'inactive'}`}>{u.active ? 'active' : 'inactive'}</span></div>
               <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                <button className="icon-btn" onClick={() => setEnrolling(u)} title="Enroll face">📸</button>
                 <button className="icon-btn" onClick={() => setEditing(u)} title="Edit">✎</button>
                 <button className="icon-btn danger" onClick={() => {
                   if (confirm(`Delete ${u.name}? They won't be able to sign in.`)) deleteUser(u.id);
@@ -65,6 +74,19 @@ export default function UsersPanel() {
             else       await updateUser(id, data);
             setEditing(null);
           }}
+        />
+      )}
+
+      {enrolling && (
+        <FaceCapture
+          mode="enroll"
+          userName={enrolling.name}
+          onCapture={async (descriptor) => {
+            await updateUser(enrolling.id, { faceDescriptor: descriptor, faceEnrolledAt: new Date().toISOString() });
+            alert(`✓ Face enrolled for ${enrolling.name}. They can now sign in with face verification.`);
+            setEnrolling(null);
+          }}
+          onCancel={() => setEnrolling(null)}
         />
       )}
     </>
