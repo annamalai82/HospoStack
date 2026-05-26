@@ -41,6 +41,8 @@ export const deliverReceipt = onDocumentCreated(
     document: 'venues/{venueId}/receipt_deliveries/{deliveryId}',
     secrets: [SENDGRID_API_KEY, SENDGRID_FROM, SENDGRID_NAME],
     timeoutSeconds: 60,
+    retry: false,
+    region: 'australia-southeast1',
   },
   async (event) => {
     const { venueId, deliveryId } = event.params;
