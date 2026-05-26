@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getVenue, updateVenue, checkReceiptSetup, queueReceiptDelivery } from '../lib/data';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { getVenue, updateVenue, checkReceiptSetup, getVenueId } from '../lib/data';
 
 export default function ReceiptSetupPanel({ onToast }) {
   const [venue,     setVenue]     = useState(null);
@@ -57,44 +59,36 @@ export default function ReceiptSetupPanel({ onToast }) {
     setTesting(true);
     setTestResult(null);
     try {
-      // Write a fake test delivery doc — the Cloud Function will pick it up
-      const fakeOrderId = 'test-' + Date.now();
-      const customer = {
-        name:  'Test Customer',
-        email: testEmail.trim() || null,
-        phone: testPhone.trim() || null,
-      };
-      // Write directly to receipt_deliveries with a test order payload embedded
-      const { addDoc, collection, getFirestore, serverTimestamp } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
-      const { _venueId } = await import('../lib/data');
-
+      const venueId = getVenueId();
+      const testId  = 'test-' + Date.now();
       const ref = await addDoc(
-        collection(db, 'venues', _venueId, 'receipt_deliveries'),
+        collection(db, 'venues', venueId, 'receipt_deliveries'),
         {
-          orderId: fakeOrderId,
-          customer,
-          status:  'queued',
-          isTest:  true,
+          orderId:  testId,
+          customer: {
+            name:  'Test Customer',
+            email: testEmail.trim() || null,
+            phone: testPhone.trim() || null,
+          },
+          status:   'queued',
+          isTest:   true,
           testOrder: {
-            id:        fakeOrderId,
+            id:        testId,
             orderType: 'takeaway',
             total:     42.90,
             gst:       3.90,
-            paidAt:    serverTimestamp(),
             items: [
-              { name: 'Butter Chicken',   qty: 1, price: 22.90, selections: [] },
-              { name: 'Garlic Naan ×2',   qty: 2, price: 5.00,  selections: [] },
-              { name: 'Mango Lassi',       qty: 1, price: 6.50,  selections: [] },
+              { name: 'Butter Chicken', qty: 1, price: 22.90, selections: [] },
+              { name: 'Garlic Naan',    qty: 2, price: 5.00,  selections: [] },
+              { name: 'Mango Lassi',    qty: 1, price: 6.50,  selections: [] },
             ],
             payments: [{ method: 'eftpos', amount: 42.90 }],
           },
           createdAt: serverTimestamp(),
         }
       );
-
       setTestResult({ queued: true, id: ref.id });
-      onToast?.('Test receipt queued — should arrive within 30 seconds');
+      onToast?.('Test receipt queued — check your email in ~30 seconds');
     } catch (e) {
       setTestResult({ error: e.message });
       onToast?.('Test failed: ' + e.message, 'error');
