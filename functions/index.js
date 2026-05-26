@@ -29,15 +29,17 @@ setGlobalOptions({ region: 'australia-southeast1', maxInstances: 10 });
 const SENDGRID_API_KEY  = defineSecret('SENDGRID_API_KEY');
 const SENDGRID_FROM     = defineSecret('SENDGRID_FROM_EMAIL');
 const SENDGRID_NAME     = defineSecret('SENDGRID_FROM_NAME');
-const TWILIO_SID        = defineSecret('TWILIO_ACCOUNT_SID');
-const TWILIO_TOKEN      = defineSecret('TWILIO_AUTH_TOKEN');
-const TWILIO_FROM       = defineSecret('TWILIO_FROM_NUMBER');
+// Twilio secrets — optional. Set them when you have a Twilio account:
+//   firebase functions:secrets:set TWILIO_ACCOUNT_SID
+//   firebase functions:secrets:set TWILIO_AUTH_TOKEN
+//   firebase functions:secrets:set TWILIO_FROM_NUMBER
+// Until set, SMS delivery is skipped and email-only mode is used.
 
 // ── deliverReceipt ─────────────────────────────────────────────────────────
 export const deliverReceipt = onDocumentCreated(
   {
     document: 'venues/{venueId}/receipt_deliveries/{deliveryId}',
-    secrets: [SENDGRID_API_KEY, SENDGRID_FROM, SENDGRID_NAME, TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM],
+    secrets: [SENDGRID_API_KEY, SENDGRID_FROM, SENDGRID_NAME],
     timeoutSeconds: 60,
   },
   async (event) => {
@@ -108,9 +110,10 @@ export const deliverReceipt = onDocumentCreated(
       }
 
       // ── SMS ────────────────────────────────────────────────────────────
-      const twilioSid   = safeSecret(TWILIO_SID);
-      const twilioToken = safeSecret(TWILIO_TOKEN);
-      const twilioFrom  = safeSecret(TWILIO_FROM);
+      // Twilio secrets read from environment — optional, won't crash if not set
+      const twilioSid   = process.env.TWILIO_ACCOUNT_SID || '';
+      const twilioToken = process.env.TWILIO_AUTH_TOKEN  || '';
+      const twilioFrom  = process.env.TWILIO_FROM_NUMBER || '';
 
       if (customer.phone && twilioSid && twilioToken && twilioFrom) {
         try {
@@ -208,13 +211,13 @@ export const resendReceipt = onCall(
 
 // ── checkReceiptSetup (callable — lets the UI verify secrets are configured) ─
 export const checkReceiptSetup = onCall(
-  { secrets: [SENDGRID_API_KEY, SENDGRID_FROM, SENDGRID_NAME, TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM] },
+  { secrets: [SENDGRID_API_KEY, SENDGRID_FROM, SENDGRID_NAME] },
   async () => {
     const sgKey   = safeSecret(SENDGRID_API_KEY);
     const sgFrom  = safeSecret(SENDGRID_FROM);
-    const twSid   = safeSecret(TWILIO_SID);
-    const twToken = safeSecret(TWILIO_TOKEN);
-    const twFrom  = safeSecret(TWILIO_FROM);
+    const twSid   = process.env.TWILIO_ACCOUNT_SID || '';
+    const twToken = process.env.TWILIO_AUTH_TOKEN  || '';
+    const twFrom  = process.env.TWILIO_FROM_NUMBER || '';
     return {
       email: { configured: !!(sgKey && sgFrom), from: sgFrom || null },
       sms:   { configured: !!(twSid && twToken && twFrom), from: twFrom || null },
