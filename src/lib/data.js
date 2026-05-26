@@ -321,12 +321,23 @@ export async function getReceiptDeliveriesForOrder(orderId) {
 // Pass customer to override the contact details (e.g. corrected email).
 export async function resendReceipt(orderId, customer = null) {
   const callable = httpsCallable(functions, 'resendReceipt');
-  const res = await callable({
-    venueId: _venueId,
-    orderId,
-    customer
-  });
+  const res = await callable({ venueId: _venueId, orderId, customer });
   return res.data; // { ok: true, deliveryId }
+}
+
+// Check whether the Cloud Function is deployed and secrets are configured.
+// Returns { deployed: bool, email: {configured, from}, sms: {configured, from} }
+export async function checkReceiptSetup() {
+  try {
+    const callable = httpsCallable(functions, 'checkReceiptSetup');
+    const res = await callable();
+    return { deployed: true, ...res.data };
+  } catch (e) {
+    // FUNCTIONS_NOT_FOUND means not deployed; other errors = auth/network
+    const notDeployed = e.code === 'functions/not-found' ||
+      e.message?.includes('NOT_FOUND') || e.message?.includes('not found');
+    return { deployed: false, notDeployed, error: e.message };
+  }
 }
 
 // ── Bookings ───────────────────────────────────────────────────────────────
