@@ -130,12 +130,13 @@ export default function GeofenceOverrideModal({ venue, onGranted, onCancel, devi
         userName={`${authedUser.name} (geofence override)`}
         onCapture={handleFaceCaptured}
         onCancel={onCancel}
+        zIndex={5100}
       />
     );
   }
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay" style={{ zIndex: 5100 }} onClick={onCancel}>
       <div className="override-modal" onClick={e => e.stopPropagation()}>
         <div className="override-head">
           <div>

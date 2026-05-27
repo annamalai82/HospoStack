@@ -11,7 +11,7 @@ import { loadFaceModels, extractDescriptor, openCamera, stopCamera } from '../li
  *   onCancel: callback() — user dismissed the modal
  *   loadingText / instructions: optional overrides
  */
-export default function FaceCapture({ mode, userName, onCapture, onCancel }) {
+export default function FaceCapture({ mode, userName, onCapture, onCancel, zIndex }) {
   const videoRef = useRef(null);
   const [stream,   setStream]   = useState(null);
   const [status,   setStatus]   = useState('loading'); // loading | ready | capturing | error
@@ -86,7 +86,11 @@ export default function FaceCapture({ mode, userName, onCapture, onCancel }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={handleCancel}>
+    <div
+      className="modal-overlay"
+      style={zIndex ? { zIndex } : undefined}
+      onClick={handleCancel}
+    >
       <div className="face-capture-modal" onClick={e => e.stopPropagation()}>
         <div className="face-capture-head">
           <div>

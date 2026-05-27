@@ -4595,6 +4595,14 @@ select:focus {
   animation: slideUp 220ms cubic-bezier(0.34,1.56,0.64,1);
 }
 
+/* When the override modal is shown via the geofence blocker, it must sit
+   ABOVE the .geofence-gate (z-index 5000). The face-capture modal used during
+   override also needs to be visible above the gate. */
+.modal-overlay:has(.override-modal),
+.modal-overlay:has(.face-capture-modal) {
+  z-index: 5100;
+}
+
 .override-head {
   display: flex;
   align-items: flex-start;
