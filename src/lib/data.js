@@ -78,6 +78,15 @@ export async function findUserByPin(pin) {
   return { id: d.id, ...d.data() };
 }
 
+/** Get all active users who have a face descriptor enrolled.
+ *  Used by face-first login to match a captured face against any enrolled staff. */
+export async function getUsersWithFaceEnrolled() {
+  const snap = await getDocs(query(col('users'), where('active', '==', true)));
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(u => Array.isArray(u.faceDescriptor) && u.faceDescriptor.length === 128);
+}
+
 // ── Geofence override (manager-authorized temporary bypass) ────────────────
 // 
 // Overrides are stored in sessionStorage (per-tab, clears on browser close)
