@@ -282,8 +282,8 @@ export default function VenuePanel({ onToast }) {
           <Toggle
             on={faceAuthEnabled}
             onChange={setFaceAuthEnabled}
-            label="🔍 Require face verification at login"
-            sub="After PIN entry, the camera captures the user's face and verifies it matches their enrolled photo. Enroll faces under Users & PINs → 📸 icon."
+            label="🔍 Enable face verification at login"
+            sub="When a user with an enrolled face signs in, the camera captures their face and verifies it matches their enrolled photo. Users without an enrolled face sign in with PIN only. Enroll faces under Users & PINs → 📸 icon."
           />
         </div>
 

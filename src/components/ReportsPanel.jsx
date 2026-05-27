@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { watchSettledOrders } from '../lib/data';
 import Modal from './Modal';
 
 // ─── Tab definitions ────────────────────────────────────────────────────────

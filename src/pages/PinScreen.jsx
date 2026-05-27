@@ -61,21 +61,17 @@ export default function PinScreen() {
       }
 
       // ── Face verification gate ─────────────────────────────────────────
-      // If venue has face auth enabled AND this user has enrolled face data,
-      // require a face match before logging in.
+      // Face auth is per-user. If venue has the feature enabled AND this
+      // particular user has enrolled a face, require a match.
+      // If the user has NO enrolled face, allow PIN-only login so the
+      // first manager can always get in to enroll the others.
       if (faceRequired && user.faceDescriptor?.length === 128) {
         setPendingUser(user);  // open face capture
         setPin('');
         return;
       }
-      // If face auth required but user hasn't enrolled, block with a clear msg
-      if (faceRequired && !user.faceDescriptor) {
-        setError(`${user.name} has no face enrolled. Manager must enroll first.`);
-        setPin('');
-        return;
-      }
 
-      // No face required → log in immediately
+      // No face enrolled (or feature off) → PIN-only login
       await login(user);
     } catch (e) {
       setError(e.message);
@@ -115,7 +111,7 @@ export default function PinScreen() {
                 background: 'var(--brand-deep)', color: 'var(--brand)',
                 borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em',
               }}>
-                🔒 FACE ID
+                🔒 FACE ID — if enrolled
               </span>
             )}
           </div>
