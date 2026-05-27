@@ -4398,6 +4398,31 @@ select:focus {
   color: var(--text);
 }
 
+/* Buttons inside the geofence blocker card need explicit contrast
+   since the card sits on a very dark background */
+.geofence-card .btn {
+  min-width: 150px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.geofence-card .btn:not(.btn-primary) {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--border-strong));
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.1) inset,
+    0 3px 10px rgba(0,0,0,0.4);
+}
+.geofence-card .btn:not(.btn-primary):hover {
+  background: color-mix(in srgb, var(--amber) 14%, var(--surface-3));
+  color: var(--amber);
+  border-color: var(--amber);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.12) inset,
+    0 6px 20px color-mix(in srgb, var(--amber) 25%, transparent);
+  transform: translateY(-2px);
+}
+
 .geofence-spinner {
   width: 48px;
   height: 48px;
@@ -4516,6 +4541,53 @@ select:focus {
   border-top: 1px solid var(--border);
   background: var(--bg-2);
   flex-shrink: 0;
+}
+
+/* Override generic btn-ghost specifically in the face capture footer —
+   make Cancel always legible regardless of theme darkness */
+.face-capture-foot .btn-ghost {
+  color: var(--text-2);
+  background: var(--surface-3);
+  border: 1.5px solid var(--border-strong);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 20px;
+  border-radius: var(--radius);
+  min-height: var(--tap);
+}
+.face-capture-foot .btn-ghost:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 12%, var(--surface-3));
+  border-color: var(--text-2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Make Capture button fill remaining width and use the success green colour
+   so it reads as the clear primary action */
+.face-capture-foot .btn {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--brand);
+  color: #000;
+  border-color: var(--brand);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.25) inset,
+    0 4px 16px color-mix(in srgb, var(--brand) 50%, transparent);
+}
+.face-capture-foot .btn:hover {
+  background: color-mix(in srgb, var(--brand) 85%, #fff);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.3) inset,
+    0 6px 24px color-mix(in srgb, var(--brand) 60%, transparent);
+  transform: translateY(-1px);
+}
+.face-capture-foot .btn:disabled {
+  background: var(--surface-3);
+  color: var(--text-3);
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 0.5;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -4658,6 +4730,21 @@ select:focus {
   border-top: 1px solid var(--border);
   background: var(--bg-2);
   flex-shrink: 0;
+}
+.override-foot .btn-ghost {
+  color: var(--text-2);
+  background: var(--surface-3);
+  border: 1.5px solid var(--border-strong);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 20px;
+  border-radius: var(--radius);
+  min-height: var(--tap);
+}
+.override-foot .btn-ghost:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 12%, var(--surface-3));
+  border-color: var(--text-2);
 }
 
 /* ── Active override banner (persistent across modes) ── */
