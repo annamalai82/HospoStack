@@ -1,24 +1,42 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getVenue } from '../lib/data';
-import { getCurrentLocation, distanceMeters, watchLocation } from '../lib/geo';
+import { getVenue, readGeofenceOverride, clearGeofenceOverride } from '../lib/data';
+import { getCurrentLocation, distanceMeters } from '../lib/geo';
+import GeofenceOverrideModal from './GeofenceOverrideModal';
 
 /**
  * GeofenceGate — wraps the entire app.
- * 
- * Blocks usage if:
- *   - Browser doesn't support geolocation
- *   - User has denied location permission
- *   - Device is more than `venue.geofenceMeters` from the venue's lat/lng
- * 
- * Allows usage if:
- *   - Venue has no geofence configured (locked = false at venue level)
- *   - Device is within the geofence radius
- * 
- * Re-checks every 60 seconds in background while app is active.
+ *
+ * Blocks usage if device is outside the venue's geofence — UNLESS an active
+ * manager override is in effect. Overrides expire automatically.
+ *
+ * On the blocked screen there's a "Manager Override" button → opens
+ * GeofenceOverrideModal → PIN + optional face check + reason + duration.
+ *
+ * Re-checks every 60 seconds (and clears expired overrides on each tick).
  */
 export default function GeofenceGate({ children }) {
-  const [state, setState] = useState({ status: 'checking', message: 'Checking location…' });
-  const [venue, setVenue] = useState(null);
+  const [state, setState]               = useState({ status: 'checking', message: 'Checking location…' });
+  const [venue, setVenue]               = useState(null);
+  const [override, setOverride]         = useState(() => readGeofenceOverride());
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [, forceTick]                   = useState(0);
+
+  // Tick once per second so the override countdown updates live
+  useEffect(() => {
+    if (!override) return;
+    const id = setInterval(() => {
+      // Expired? Clear it.
+      if (Date.now() > override.expiresAt) {
+        clearGeofenceOverride();
+        setOverride(null);
+        // Force a re-check now that override is gone
+        check();
+      } else {
+        forceTick(t => t + 1);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [override]); // eslint-disable-line
 
   const check = useCallback(async (venueOverride) => {
     const v = venueOverride || venue;
@@ -31,7 +49,6 @@ export default function GeofenceGate({ children }) {
   }, [venue]);
 
   const doCheck = async (v) => {
-    // If venue hasn't enabled geofencing → pass
     if (!v?.geofenceEnabled) {
       setState({ status: 'ok', message: 'Geofence disabled' });
       return;
@@ -50,6 +67,8 @@ export default function GeofenceGate({ children }) {
         status: loc.reason,
         message: locationErrorMessage(loc.reason),
         details: loc.message,
+        currentLocation: null,
+        distance: null,
       });
       return;
     }
@@ -58,10 +77,9 @@ export default function GeofenceGate({ children }) {
     const allowed = distance <= (v.geofenceMeters || 200);
     if (allowed) {
       setState({
-        status: 'ok',
-        message: `${Math.round(distance)}m from venue`,
-        distance,
-        accuracy: loc.accuracy,
+        status: 'ok', message: `${Math.round(distance)}m from venue`,
+        distance, accuracy: loc.accuracy,
+        currentLocation: loc,
       });
     } else {
       setState({
@@ -70,6 +88,7 @@ export default function GeofenceGate({ children }) {
         distance,
         venueDistance: Math.round(distance),
         radius: v.geofenceMeters,
+        currentLocation: loc,
       });
     }
   };
@@ -82,11 +101,93 @@ export default function GeofenceGate({ children }) {
     // eslint-disable-next-line
   }, []);
 
-  if (state.status === 'ok') return children;
-  if (state.status === 'checking') {
-    return <LoadingScreen message={state.message} />;
+  // ── Override is active → render children with persistent banner ──
+  if (override) {
+    return (
+      <>
+        <OverrideBanner
+          override={override}
+          state={state}
+          onClear={() => {
+            if (confirm('Cancel the active geofence override? You will need to be inside the venue (or grant a new override) to continue using the app.')) {
+              clearGeofenceOverride();
+              setOverride(null);
+              check();
+            }
+          }}
+        />
+        <div style={{ paddingTop: 36 }}>{children}</div>
+      </>
+    );
   }
-  return <BlockedScreen state={state} venue={venue} onRetry={() => { setState({ status: 'checking', message: 'Re-checking…' }); check(); }} />;
+
+  // ── No override — show children only when within geofence ──
+  if (state.status === 'ok') return children;
+  if (state.status === 'checking') return <LoadingScreen message={state.message} />;
+
+  return (
+    <>
+      <BlockedScreen
+        state={state}
+        venue={venue}
+        onRetry={() => { setState({ status: 'checking', message: 'Re-checking…' }); check(); }}
+        onRequestOverride={() => setShowOverrideModal(true)}
+      />
+      {showOverrideModal && (
+        <GeofenceOverrideModal
+          venue={venue}
+          deviceName={(() => {
+            try { return JSON.parse(localStorage.getItem('hospostack.device') || '{}')?.deviceName || ''; }
+            catch { return ''; }
+          })()}
+          mode={(() => {
+            try { return JSON.parse(localStorage.getItem('hospostack.device') || '{}')?.mode || ''; }
+            catch { return ''; }
+          })()}
+          currentLocation={state.currentLocation || null}
+          distanceFromVenue={state.distance || null}
+          onGranted={(o) => {
+            setOverride(o);
+            setShowOverrideModal(false);
+          }}
+          onCancel={() => setShowOverrideModal(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Active override banner (visible across all modes) ────────────────────
+function OverrideBanner({ override, state, onClear }) {
+  const remainingMs = Math.max(0, override.expiresAt - Date.now());
+  const mins = Math.floor(remainingMs / 60_000);
+  const secs = Math.floor((remainingMs % 60_000) / 1000);
+  const remainingLabel = mins >= 60
+    ? `${Math.floor(mins/60)}h ${mins%60}m`
+    : mins >= 1
+    ? `${mins}m ${String(secs).padStart(2,'0')}s`
+    : `${secs}s`;
+
+  const warning = mins < 5;
+
+  return (
+    <div className={`override-banner ${warning ? 'warning' : ''}`}>
+      <span className="override-banner-icon">🔓</span>
+      <div className="override-banner-text">
+        <b>Geofence override active</b>
+        <span className="override-banner-meta">
+          by {override.userName} · {override.reason} ·
+          <b style={{ marginLeft: 4 }}>{remainingLabel} left</b>
+          {state?.status === 'out_of_range' && (
+            <span style={{ marginLeft: 8, opacity: 0.85 }}>· ~{state.venueDistance}m off-site</span>
+          )}
+        </span>
+      </div>
+      <button className="override-banner-clear" onClick={onClear} title="Cancel override">
+        Cancel
+      </button>
+    </div>
+  );
 }
 
 function locationErrorMessage(reason) {
@@ -118,7 +219,7 @@ function LoadingScreen({ message }) {
   );
 }
 
-function BlockedScreen({ state, venue, onRetry }) {
+function BlockedScreen({ state, venue, onRetry, onRequestOverride }) {
   const isPermission = state.status === 'permission_denied' || state.status === 'unavailable';
   const isRange      = state.status === 'out_of_range';
   const isVenue      = state.status === 'venue_not_configured';
@@ -140,7 +241,7 @@ function BlockedScreen({ state, venue, onRetry }) {
           <div style={{
             background: 'var(--surface-2)', borderRadius: 'var(--radius)',
             padding: 14, margin: '16px 0', fontSize: 13, color: 'var(--text-2)',
-            display: 'flex', flexDirection: 'column', gap: 4,
+            display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left',
           }}>
             <div><b>Venue:</b> {venue.name}</div>
             {venue.address && <div><b>Address:</b> {venue.address}</div>}
@@ -168,11 +269,29 @@ function BlockedScreen({ state, venue, onRetry }) {
           <button className="btn btn-primary" onClick={onRetry}>
             🔄 Try again
           </button>
-          {state.details && (
-            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 10, width: '100%' }}>
-              Diagnostic: {state.details}
-            </div>
-          )}
+          <button
+            className="btn"
+            onClick={onRequestOverride}
+            style={{ borderColor: 'color-mix(in srgb, var(--amber) 40%, var(--btn-border))' }}
+          >
+            🔓 Manager override
+          </button>
+        </div>
+
+        {state.details && (
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 16 }}>
+            Diagnostic: {state.details}
+          </div>
+        )}
+
+        <div style={{
+          fontSize: 11, color: 'var(--text-3)', marginTop: 22,
+          paddingTop: 14, borderTop: '1px solid var(--border)', lineHeight: 1.6
+        }}>
+          🔓 <b>Manager Override</b> temporarily disables the geofence for off-site work
+          (catering, setup at a new venue, training, etc). Requires a manager PIN
+          {venue?.faceAuthEnabled ? ' + face verification' : ''}.
+          Every override is audit-logged.
         </div>
       </div>
     </div>

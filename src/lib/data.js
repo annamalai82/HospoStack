@@ -78,6 +78,97 @@ export async function findUserByPin(pin) {
   return { id: d.id, ...d.data() };
 }
 
+// ── Geofence override (manager-authorized temporary bypass) ────────────────
+// 
+// Overrides are stored in sessionStorage (per-tab, clears on browser close)
+// AND logged to Firestore for audit. The Firestore log is append-only.
+//
+// Override doc shape:
+//   {
+//     id, userId, userName, userRole,
+//     reason, duration (ms), expiresAt (ms timestamp),
+//     deviceName, mode,
+//     grantedAt (server timestamp),
+//     // optional geolocation snapshot at the time of grant
+//     locationAtGrant: { lat, lng, accuracy } | null,
+//     distanceMeters: number | null,  // distance from venue at grant
+//   }
+
+const OVERRIDE_KEY = 'hospostack.geofenceOverride';
+
+/** Read the current active override from sessionStorage (returns null if none / expired) */
+export function readGeofenceOverride() {
+  try {
+    const raw = sessionStorage.getItem(OVERRIDE_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o?.expiresAt || Date.now() > o.expiresAt) {
+      sessionStorage.removeItem(OVERRIDE_KEY);
+      return null;
+    }
+    return o;
+  } catch { return null; }
+}
+
+/** Clear the active override (used by manager Cancel Override button) */
+export function clearGeofenceOverride() {
+  try { sessionStorage.removeItem(OVERRIDE_KEY); } catch {}
+}
+
+/** Grant an override — stores locally + writes audit log to Firestore.
+ *  Returns the override object.
+ */
+export async function grantGeofenceOverride({
+  user, durationMs, reason, deviceName, mode,
+  locationAtGrant = null, distanceMeters = null,
+}) {
+  if (!user || user.role !== 'manager') {
+    throw new Error('Only managers can override the geofence');
+  }
+  const now = Date.now();
+  const override = {
+    userId:        user.id,
+    userName:      user.name,
+    userRole:      user.role,
+    reason:        (reason || '').trim() || '(no reason given)',
+    durationMs,
+    grantedAtMs:   now,
+    expiresAt:     now + durationMs,
+    deviceName:    deviceName || '',
+    mode:          mode || '',
+    locationAtGrant,
+    distanceMeters,
+  };
+
+  // Write audit log (append-only — never updated or deleted)
+  try {
+    await addDoc(col('geofence_audit'), {
+      ...override,
+      grantedAt: serverTimestamp(),
+      action: 'grant',
+    });
+  } catch (e) {
+    // If audit fails, still allow the override but warn
+    console.warn('Audit log write failed (override still active):', e);
+  }
+
+  // Save locally so other components can see it
+  sessionStorage.setItem(OVERRIDE_KEY, JSON.stringify(override));
+  return override;
+}
+
+/** Subscribe to the geofence audit log — for the audit panel in Config Mode. */
+export function watchGeofenceAudit(cb, limitDays = 30) {
+  const since = Date.now() - (limitDays * 24 * 60 * 60 * 1000);
+  return onSnapshot(
+    query(col('geofence_audit'), orderBy('grantedAtMs', 'desc')),
+    s => cb(s.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(o => (o.grantedAtMs || 0) >= since)
+    )
+  );
+}
+
 // ── Menu ───────────────────────────────────────────────────────────────────
 export function watchCategories(cb) {
   return onSnapshot(query(col('menu_categories'), orderBy('order')), s => {
