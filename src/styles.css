@@ -4578,6 +4578,27 @@ select:focus {
 .pill.active   { background: var(--green-deep); color: var(--green);  border: 1px solid rgba(74,222,128,0.3); }
 .pill.inactive { background: var(--surface-2);  color: var(--text-3); border: 1px solid var(--border); }
 
+/* When the override banner is active, push everything down by its height.
+   Using a root-level class so even pages with 100dvh / position:fixed
+   children get the offset applied. */
+:root.has-override-banner {
+  --override-banner-h: 36px;
+}
+:root.has-override-banner body {
+  padding-top: var(--override-banner-h);
+}
+:root.has-override-banner .pin-screen {
+  min-height: calc(100dvh - var(--bar) - var(--override-banner-h));
+}
+:root.has-override-banner .app--with-bg {
+  min-height: calc(100dvh - var(--override-banner-h));
+}
+@media (max-width: 640px) {
+  :root.has-override-banner {
+    --override-banner-h: 32px;
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    GEOFENCE OVERRIDE MODAL & BANNER
    ════════════════════════════════════════════════════════════════════════════ */

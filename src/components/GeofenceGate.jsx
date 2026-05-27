@@ -102,6 +102,18 @@ export default function GeofenceGate({ children }) {
   }, []);
 
   // ── Override is active → render children with persistent banner ──
+  // The banner is position:fixed at top; we push the page down by adding
+  // a class on <html> which applies padding-top via CSS. This works even
+  // when children use 100dvh / position:fixed (like the PinScreen).
+  useEffect(() => {
+    if (override) {
+      document.documentElement.classList.add('has-override-banner');
+    } else {
+      document.documentElement.classList.remove('has-override-banner');
+    }
+    return () => document.documentElement.classList.remove('has-override-banner');
+  }, [override]);
+
   if (override) {
     return (
       <>
@@ -116,7 +128,7 @@ export default function GeofenceGate({ children }) {
             }
           }}
         />
-        <div style={{ paddingTop: 36 }}>{children}</div>
+        {children}
       </>
     );
   }

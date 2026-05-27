@@ -48,17 +48,22 @@ export default function PinScreen() {
         setPin('');
         return;
       }
-      // Role check
-      if (user.role !== 'manager') {
-        const required = device.mode === 'kitchen' ? 'kitchen'
-                       : device.mode === 'floor'   ? 'waiter'
-                       : 'cashier';
-        if (user.role !== required) {
-          setError(`${user.name} is a ${user.role} — wrong device`);
-          setPin('');
-          return;
-        }
+      // ── Role check ────────────────────────────────────────────────────
+      // Managers can use any device. Kitchen staff can only use kitchen.
+      // Waiters and cashiers can use either floor OR till devices (these
+      // are customer-facing roles that overlap in practice — many small
+      // venues have staff that both take orders and process payments).
+      if (user.role === 'kitchen' && device.mode !== 'kitchen') {
+        setError(`${user.name} is kitchen staff — please use the Kitchen Display device.`);
+        setPin('');
+        return;
       }
+      if (user.role !== 'manager' && device.mode === 'kitchen' && user.role !== 'kitchen') {
+        setError(`${user.name} is a ${user.role} — Kitchen Display requires kitchen staff.`);
+        setPin('');
+        return;
+      }
+      // Manager / waiter / cashier on till or floor → allowed
 
       // ── Face verification gate ─────────────────────────────────────────
       // Face auth is per-user. If venue has the feature enabled AND this
