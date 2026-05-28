@@ -216,7 +216,6 @@ export default function FloorMode() {
               <button
                 className="btn"
                 disabled={!existing || existing.status !== 'ready'}
-                style={{ opacity: (!existing || existing.status !== 'ready') ? 0.4 : 1 }}
                 onClick={handleMarkServed}
               >Mark Served</button>
               {cart.length > 0 ? (
@@ -225,7 +224,6 @@ export default function FloorMode() {
                 <button
                   className="btn btn-primary"
                   disabled={!existing}
-                  style={{ opacity: existing ? 1 : 0.4 }}
                   onClick={handleSendToBilling}
                 >Bill at Till →</button>
               )}

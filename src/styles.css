@@ -359,16 +359,16 @@ main {
 
 /* light: btn/page=2.3  txt/btn=7.2  prim=4.8  ✅ */
 [data-theme='light'] {
-  --btn-bg:           #d4a890;
-  --btn-bg-hover:     #c48e74;
-  --btn-border:       #c09070;
-  --btn-border-hover: #a07050;
-  --btn-text:         #1a1210;
-  --btn-text-hover:   #0a0806;
-  --btn-shimmer:      0.30;
+  --btn-bg:           #c9966f;
+  --btn-bg-hover:     #b8825c;
+  --btn-border:       #9a6f4a;
+  --btn-border-hover: #7d5638;
+  --btn-text:         #1a1008;
+  --btn-text-hover:   #000000;
+  --btn-shimmer:      0.35;
   --btn-primary-text: #ffffff;
-  --btn-shadow:       rgba(0,0,0,0.16);
-  --btn-glow:         rgba(196,74,26,0.28);
+  --btn-shadow:       rgba(90,50,20,0.28);
+  --btn-glow:         rgba(196,74,26,0.30);
 }
 
 /* cinema: btn/page=2.4  txt/btn=8.3  prim=6.2  ✅ */
@@ -675,12 +675,20 @@ main {
 }
 
 .btn:disabled, .btn[disabled] {
-  opacity: 0.4;
   cursor: not-allowed;
   pointer-events: none;
   transform: none;
-  filter: grayscale(0.4);
+  /* Visible disabled state — a clear muted button, not a near-invisible ghost.
+     New staff can still SEE the button exists, just that it's inactive. */
+  background: var(--surface-3) !important;
+  color: var(--text-3) !important;
+  border-color: var(--border-strong) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
+  filter: none;
+  opacity: 0.85;
 }
+.btn:disabled::before, .btn[disabled]::before,
+.btn:disabled::after,  .btn[disabled]::after { display: none; }
 
 /* ── PRIMARY — brand-coloured with strong glow ──────────────────────────── */
 .btn-primary {
@@ -1542,6 +1550,13 @@ main {
 .cart-totals .line { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 13px; color: var(--text-2); margin-bottom: 3px; }
 .cart-totals .line.total { font-size: 18px; color: var(--text); font-weight: 600; border-top: 1px dashed var(--border-strong); padding-top: 8px; margin-top: 6px; }
 .cart-actions { padding: 10px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex-shrink: 0; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+/* Cart action buttons are primary touch targets — make them tall + bold
+   so new staff can clearly see and tap them */
+.cart-actions .btn {
+  min-height: 52px;
+  font-size: 15px;
+  font-weight: 700;
+}
 .cart-actions.single { grid-template-columns: 1fr; }
 .cart-empty { display: grid; place-items: center; padding: 32px 20px; color: var(--text-3); text-align: center; }
 .cart-empty .icon { font-size: 28px; opacity: 0.4; }
