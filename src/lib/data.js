@@ -303,11 +303,19 @@ export async function updateOrder(orderId, patch) {
 }
 
 export async function sendOrderToKitchen(orderId, items, totals) {
+  // Stamp any item that hasn't been sent yet with the current batch timestamp.
+  // The KDS uses sentBatch to highlight items added in a LATER batch than the
+  // ticket's original send (i.e. additions to an existing table order).
+  const batchTs = Date.now();
+  const stamped = (items || []).map(it =>
+    it.sentBatch ? it : { ...it, sentBatch: batchTs }
+  );
   await updateDoc(doc(db, 'venues', _venueId, 'orders', orderId), {
-    items: stripUndefined(items),
+    items: stripUndefined(stamped),
     ...stripUndefined(totals),
     status: 'sent',
-    sentAt: serverTimestamp()
+    sentAt: serverTimestamp(),
+    lastBatchAt: batchTs,
   });
 }
 
@@ -320,15 +328,18 @@ export async function createAndSendOrder(payload, items, totals) {
   const orderRef = doc(col('orders'));
   const batch = writeBatch(db);
   const clean = stripUndefined(payload);
+  const batchTs = Date.now();
+  const stamped = (items || []).map(it => it.sentBatch ? it : { ...it, sentBatch: batchTs });
   batch.set(orderRef, {
     ...clean,
-    items: stripUndefined(items) || [],
+    items: stripUndefined(stamped) || [],
     ...stripUndefined(totals),
     paid: 0,
     payments: [],
     status: 'sent',
     openedAt: serverTimestamp(),
-    sentAt: serverTimestamp()
+    sentAt: serverTimestamp(),
+    lastBatchAt: batchTs,
   });
   await batch.commit();
   return orderRef.id;

@@ -86,6 +86,7 @@ function orderFingerprint(order) {
   return JSON.stringify({
     items: (order.items || []).map(i => ({ name: i.name, qty: i.qty, notes: i.notes, selections: i.selections })),
     status: order.status,
+    allergyNote: order.allergyNote || '',
   });
 }
 
@@ -395,6 +396,19 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
   const doneCount  = visibleIndices.filter(i => allItems[i].status === 'ready').length;
   const totalCount = visibleIndices.length;
 
+  // Batch detection: items added to an existing table order carry a newer
+  // sentBatch than the order's first batch. The most recent batch is "new".
+  const batches = allItems.map(it => it.sentBatch || 0).filter(Boolean);
+  const minBatch = batches.length ? Math.min(...batches) : 0;
+  const maxBatch = batches.length ? Math.max(...batches) : 0;
+  const hasNewItems = maxBatch > minBatch;
+  // Acknowledge state for the "new items added" highlight (local to ticket)
+  const [newItemsAcked, setNewItemsAcked] = useState(false);
+  // Reset acknowledgement whenever a newer batch arrives
+  useEffect(() => { setNewItemsAcked(false); }, [maxBatch]);
+  const showNewHighlight = hasNewItems && !newItemsAcked;
+  const isNewBatchItem = (it) => (it.sentBatch || 0) === maxBatch && maxBatch > minBatch;
+
   const [showMoveTable, setShowMoveTable] = useState(false);
 
   const handleBump = async (originalIndex) => {
@@ -437,7 +451,7 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
   const typeBadge = isDineIn ? 'DINE-IN' : 'TAKEAWAY';
 
   return (
-    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'} ${unacked ? 'kds-ticket--alert' : ''}`}>
+    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'} ${unacked ? 'kds-ticket--alert' : ''} ${showNewHighlight ? 'kds-ticket--newitems' : ''}`}>
 
       {/* New-order acknowledgement banner — tap to stop blink + beep */}
       {unacked && (
@@ -447,10 +461,22 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
         </button>
       )}
 
+      {/* Added-items banner — when a waiter adds items to an existing order */}
+      {showNewHighlight && !unacked && (
+        <button
+          className="kds-ticket-newitems-banner"
+          onClick={() => setNewItemsAcked(true)}
+          title="Tap to acknowledge added items"
+        >
+          <span className="kds-newitems-pulse">➕</span>
+          <span>ITEMS ADDED — tap to acknowledge</span>
+        </button>
+      )}
+
       {/* ── Header ── */}
       <button
         className="kds-ticket-head"
-        onClick={() => { if (unacked) onAcknowledge(); onToggleCollapse(); }}
+        onClick={() => { if (unacked) onAcknowledge(); if (showNewHighlight) setNewItemsAcked(true); onToggleCollapse(); }}
       >
         <div className="kds-ticket-head-left">
           <div className={`kds-type-badge ${isDineIn ? 'dinein' : 'takeaway'}`}>
@@ -504,10 +530,12 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
           <div className="kds-items">
             {visibleIndices.map(idx => {
               const it = allItems[idx];
+              const itemIsNew = isNewBatchItem(it) && showNewHighlight;
               return (
-                <div key={idx} className={`kds-item ${it.status === 'ready' ? 'done' : ''}`}>
+                <div key={idx} className={`kds-item ${it.status === 'ready' ? 'done' : ''} ${itemIsNew ? 'kds-item--new' : ''}`}>
                   <span className="qty">{it.qty}×</span>
                   <span className="label">
+                    {itemIsNew && <span className="kds-item-new-tag">NEW</span>}
                     {it.name}
                     {it.isMisc && <span style={{ fontSize: 10, color: 'var(--amber)', marginLeft: 6, fontWeight: 600 }}>MISC</span>}
                     {(it.allergens || []).length > 0 && (

@@ -5713,3 +5713,66 @@ select:focus {
   background: var(--red);
   color: #fff;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   KDS — ADDED ITEMS HIGHLIGHT (waiter adds to an existing table order)
+   ════════════════════════════════════════════════════════════════════════════ */
+@keyframes kdsNewItemBlink {
+  0%, 100% { background: color-mix(in srgb, var(--blue) 12%, transparent); }
+  50%      { background: color-mix(in srgb, var(--blue) 32%, transparent); }
+}
+.kds-ticket--newitems {
+  box-shadow: 0 0 0 2px var(--blue), 0 0 24px color-mix(in srgb, var(--blue) 40%, transparent), var(--shadow);
+}
+.kds-item--new {
+  animation: kdsNewItemBlink 0.9s ease-in-out infinite;
+  border-radius: 8px;
+  position: relative;
+}
+.kds-item-new-tag {
+  display: inline-block;
+  background: var(--blue);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* "Items added" banner on the ticket */
+.kds-ticket-newitems-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  background: linear-gradient(135deg, var(--blue), color-mix(in srgb, var(--blue) 70%, #000));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  animation: kdsAckPulse 0.9s ease-in-out infinite;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+.kds-newitems-pulse {
+  font-size: 16px;
+  animation: kdsBellShake 0.9s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* Make the allergy banner pulse to grab attention */
+.kds-allergy-banner {
+  animation: kdsAllergyPulse 1.4s ease-in-out infinite;
+}
+@keyframes kdsAllergyPulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%      { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 35%, transparent); }
+}

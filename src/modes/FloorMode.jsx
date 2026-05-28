@@ -7,7 +7,7 @@ import {
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
 import StockAlertBanner from '../components/StockAlertBanner';
-import { VoidConfirmModal } from './TillMode';
+import { VoidConfirmModal, AllergyNoteModal } from './TillMode';
 
 export default function FloorMode() {
   const { device } = useDevice();
@@ -22,6 +22,8 @@ export default function FloorMode() {
   const [venue, setVenue] = useState(null);
   const [tick, setTick] = useState(0);
   const [showVoidConfirm, setShowVoidConfirm] = useState(false);
+  const [showAllergy, setShowAllergy] = useState(false);
+  const [allergyNote, setAllergyNote] = useState('');
 
   const venueId = device?.venueId;
   useEffect(() => { if (!venueId) return; return watchTables(setTables); }, [venueId]);
@@ -66,12 +68,14 @@ export default function FloorMode() {
   const handleOpenTable = async (table) => {
     setOpenTable(table);
     setCart([]);
+    // Load any existing allergy note for this table's order
+    setAllergyNote(orderForTable(table.id)?.allergyNote || '');
     if (!orderForTable(table.id)) {
       await updateTableStatus(table.id, 'seated');
     }
   };
 
-  const handleCloseEditor = () => { setOpenTable(null); setCart([]); };
+  const handleCloseEditor = () => { setOpenTable(null); setCart([]); setAllergyNote(''); };
 
   // ── Cart manipulation ────────────────────────────────────────────────
   const addToCart = (item) => {
@@ -137,13 +141,17 @@ export default function FloorMode() {
       const items = [...(existing.items || []), ...sentCart];
       const totals = calcTotals(items);
       await sendOrderToKitchen(existing.id, items, totals);
+      if (allergyNote.trim() && allergyNote.trim() !== (existing.allergyNote || '')) {
+        await updateOrder(existing.id, { allergyNote: allergyNote.trim() });
+      }
     } else {
       const orderId = await createOrder({
         tableId: openTable.id,
         tableNumber: openTable.number,
         orderType: 'dine-in',
         openedBy: device.user.id,
-        items: []
+        items: [],
+        ...(allergyNote.trim() ? { allergyNote: allergyNote.trim() } : {})
       });
       const totals = calcTotals(sentCart);
       await sendOrderToKitchen(orderId, sentCart, totals);
@@ -203,6 +211,12 @@ export default function FloorMode() {
             <div className="cart-head">
               <div className="tbl">Table <b>{openTable.number}</b></div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className={`btn-sm ${allergyNote.trim() ? 'btn btn-danger' : 'btn'}`}
+                  onClick={() => setShowAllergy(true)}
+                  title="Flag a customer allergy for the kitchen"
+                  style={{ fontSize: 11 }}
+                >⚠ {allergyNote.trim() ? 'Allergy ✓' : 'Allergy'}</button>
                 {existing && (
                   <button
                     className="btn btn-danger btn-sm"
@@ -237,6 +251,21 @@ export default function FloorMode() {
             order={existing}
             onCancel={() => setShowVoidConfirm(false)}
             onConfirm={handleVoid}
+          />
+        )}
+        {showAllergy && (
+          <AllergyNoteModal
+            note={allergyNote}
+            activeOrder={existing}
+            onSave={async (note) => {
+              setAllergyNote(note);
+              if (existing) {
+                await updateOrder(existing.id, { allergyNote: note.trim() || null });
+                showToast(note.trim() ? '⚠ Allergy sent to kitchen' : 'Allergy note cleared');
+              }
+              setShowAllergy(false);
+            }}
+            onClose={() => setShowAllergy(false)}
           />
         )}
       </>

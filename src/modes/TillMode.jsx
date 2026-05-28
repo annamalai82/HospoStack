@@ -40,6 +40,8 @@ export default function TillMode() {
   const [discount, setDiscount] = useState(null);      // { type:'pct'|'amount', value, reason }
   const [showDiscount, setShowDiscount] = useState(false);
   const [phSurchargeOn, setPhSurchargeOn] = useState(false); // public holiday toggle
+  const [allergyNote, setAllergyNote] = useState('');  // customer allergy note for this order
+  const [showAllergy, setShowAllergy] = useState(false);
   const [tick, setTick] = useState(0);
 
   const venueId = device?.venueId;
@@ -108,6 +110,8 @@ export default function TillMode() {
     } else {
       setDiscount(null);
     }
+    // Sync allergy note from the active order (or clear when none/no order)
+    setAllergyNote(activeOrder?.allergyNote || '');
   }, [activeOrderId, activeOrder?.discount]);
 
   // Helper: compute totals for any item list using the CURRENT discount + surcharge.
@@ -202,6 +206,10 @@ export default function TillMode() {
         const items = [...(activeOrder.items || []), ...sentCart];
         const t = totals(items);
         await sendOrderToKitchen(activeOrder.id, items, t);
+        // If an allergy note was set/changed this round, push it to the order
+        if (allergyNote.trim() && allergyNote.trim() !== (activeOrder.allergyNote || '')) {
+          await updateOrder(activeOrder.id, { allergyNote: allergyNote.trim() });
+        }
         showToast(`+${cart.length} item${cart.length === 1 ? '' : 's'} sent to kitchen`);
       } else {
         // New order — atomic create+send so we never leave an orphan empty order
@@ -213,7 +221,8 @@ export default function TillMode() {
           tableNumber: tbl?.number || null,
           customerName: !isDineIn && pendingCustomerName.trim() ? pendingCustomerName.trim() : null,
           orderType,
-          openedBy: device.user.id
+          openedBy: device.user.id,
+          ...(allergyNote.trim() ? { allergyNote: allergyNote.trim() } : {})
         };
         const orderId = await createAndSendOrder(newOrderMeta, sentCart, t);
         // Mark table as ordering
@@ -426,6 +435,14 @@ export default function TillMode() {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className={`btn-sm ${allergyNote.trim() ? 'btn btn-danger' : 'btn'}`}
+            onClick={() => setShowAllergy(true)}
+            title="Flag a customer allergy for the kitchen"
+            style={{ fontSize: 11 }}
+          >
+            ⚠ {allergyNote.trim() ? 'Allergy ✓' : 'Allergy'}
+          </button>
           {venue?.publicHolidaySurchargeEnabled && (
             <button
               className={`btn-sm ${phSurchargeOn ? 'btn btn-primary' : 'btn'}`}
@@ -639,6 +656,24 @@ export default function TillMode() {
           order={activeOrder}
           onCancel={() => setShowVoidConfirm(false)}
           onConfirm={handleVoid}
+        />
+      )}
+
+      {showAllergy && (
+        <AllergyNoteModal
+          note={allergyNote}
+          activeOrder={activeOrder}
+          onSave={async (note) => {
+            setAllergyNote(note);
+            // If there's already an active order, push the note immediately
+            // so the kitchen sees it without waiting for the next send.
+            if (activeOrder) {
+              await updateOrder(activeOrder.id, { allergyNote: note.trim() || null });
+              showToast(note.trim() ? '⚠ Allergy sent to kitchen' : 'Allergy note cleared');
+            }
+            setShowAllergy(false);
+          }}
+          onClose={() => setShowAllergy(false)}
         />
       )}
 
@@ -1633,6 +1668,83 @@ export function VoidConfirmModal({ order, onCancel, onConfirm }) {
           </button>
           <button className="btn btn-danger btn-lg" onClick={confirm} disabled={busy}>
             {busy ? 'Voiding…' : '🚫 Void Order'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Allergy note modal — waiter flags a customer allergy for the kitchen ──
+   Quick-pick common allergens + a free-text box for specifics. On save the
+   note is attached to the order (order.allergyNote) and shows as a red
+   ALLERGEN ALERT banner on the kitchen ticket. */
+export function AllergyNoteModal({ note, activeOrder, onSave, onClose }) {
+  const COMMON = ['Nuts', 'Peanuts', 'Gluten', 'Dairy', 'Egg', 'Soy', 'Fish', 'Shellfish', 'Sesame'];
+  const [text, setText] = useState(note || '');
+
+  const addTag = (tag) => {
+    const parts = text.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.includes(tag)) {
+      setText(parts.filter(p => p !== tag).join(', '));
+    } else {
+      setText([...parts, tag].join(', '));
+    }
+  };
+  const activeTags = text.split(',').map(s => s.trim());
+
+  return (
+    <div className="void-modal-overlay" onClick={onClose}>
+      <div className="void-modal" onClick={e => e.stopPropagation()}>
+        <div className="void-modal-head" style={{ background: 'var(--red-deep, rgba(248,113,113,0.15))', color: 'var(--red)', borderColor: 'rgba(248,113,113,0.3)' }}>
+          <span style={{ fontSize: 20 }}>⚠</span>
+          <div>
+            <h3 style={{ margin: 0 }}>Customer allergy</h3>
+            <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
+              Sent to the kitchen immediately as a ticket alert
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '18px 20px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            Common allergens — tap to add
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+            {COMMON.map(tag => {
+              const sel = activeTags.includes(tag);
+              return (
+                <button key={tag} type="button" onClick={() => addTag(tag)}
+                  className={`cat-chip ${sel ? 'active' : ''}`}
+                  style={{ padding: '7px 13px', fontSize: 13,
+                    ...(sel ? { borderColor: 'var(--red)', color: 'var(--red)', background: 'color-mix(in srgb, var(--red) 12%, transparent)' } : {}) }}
+                >{sel ? '⚠ ' : '+ '}{tag}</button>
+              );
+            })}
+          </div>
+
+          <div className="field">
+            <label>Details (free text)</label>
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="e.g. Severe peanut allergy — no traces. Coeliac, separate prep."
+              rows={3}
+              style={{ fontFamily: 'inherit', fontSize: 14, lineHeight: 1.5, resize: 'vertical', minHeight: 70 }}
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="void-modal-foot">
+          {note && (
+            <button className="btn-ghost" onClick={() => onSave('')} style={{ marginRight: 'auto', color: 'var(--text-3)' }}>
+              Clear allergy
+            </button>
+          )}
+          <button className="btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-danger" onClick={() => onSave(text)}>
+            ⚠ Send to kitchen
           </button>
         </div>
       </div>
