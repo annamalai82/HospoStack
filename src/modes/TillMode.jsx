@@ -556,7 +556,6 @@ export default function TillMode() {
           className="btn btn-primary"
           onClick={handleSendToKitchen}
           disabled={!cart.length}
-          style={{ opacity: cart.length ? 1 : 0.4 }}
         >
           Send to Kitchen
         </button>
