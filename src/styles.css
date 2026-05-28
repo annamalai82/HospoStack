@@ -953,17 +953,109 @@ main {
 .config-foot .device-name input { max-width: 220px; }
 
 /* ── PIN SCREEN ────────────────────────────────────────────────────────── */
-.pin-screen { min-height: calc(100dvh - var(--bar)); display: grid; place-items: center; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
-.pin-card { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px 20px; box-shadow: var(--shadow-lg); }
-.pin-card h2 { font-family: var(--font-serif); font-style: italic; font-weight: 400; font-size: 26px; }
+.pin-screen {
+  min-height: calc(100dvh - var(--bar));
+  display: grid;
+  place-items: center;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  position: relative;
+  overflow: hidden;
+}
+/* Futuristic animated backdrop — drifting aurora glows */
+.pin-screen::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  background:
+    radial-gradient(closest-side circle at 20% 30%,
+      color-mix(in srgb, var(--brand) 22%, transparent), transparent 70%),
+    radial-gradient(closest-side circle at 80% 70%,
+      color-mix(in srgb, var(--brand) 16%, transparent), transparent 70%),
+    radial-gradient(closest-side circle at 60% 20%,
+      color-mix(in srgb, var(--brand) 12%, transparent), transparent 70%);
+  filter: blur(40px);
+  animation: auroraDrift 18s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+/* Faint grid overlay for a 'control panel' feel */
+.pin-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(circle at center, #000 0%, transparent 78%);
+          mask-image: radial-gradient(circle at center, #000 0%, transparent 78%);
+  pointer-events: none;
+}
+@keyframes auroraDrift {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(4%, -3%) scale(1.08); }
+  100% { transform: translate(-3%, 4%) scale(1.04); }
+}
+.pin-screen > * { position: relative; z-index: 1; }
+
+.pin-card {
+  width: 100%;
+  max-width: 380px;
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--surface) 94%, var(--brand) 6%) 0%,
+      var(--surface) 55%,
+      var(--bg-2) 100%
+    );
+  border: 1px solid var(--border-strong);
+  border-radius: 22px;
+  padding: 30px 26px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04) inset,
+    0 24px 64px rgba(0,0,0,0.5),
+    0 0 60px color-mix(in srgb, var(--brand) 10%, transparent);
+  position: relative;
+  overflow: hidden;
+  animation: authCardIn 380ms cubic-bezier(0.34,1.4,0.64,1);
+}
+.pin-card::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: 18%; right: 18%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--brand), transparent);
+}
+.pin-card h2 { font-family: var(--font-serif); font-style: italic; font-weight: 400; font-size: 27px; }
 .pin-card .subtitle { color: var(--text-3); font-size: 13px; margin-top: 4px; }
-.pin-dots { display: flex; gap: 12px; justify-content: center; margin: 22px 0 6px; }
+.pin-dots { display: flex; gap: 14px; justify-content: center; margin: 24px 0 6px; }
 .pin-dot { width: 16px; height: 16px; border-radius: 999px; border: 1.5px solid var(--border-strong); transition: all 120ms; }
 .pin-dot.filled { background: var(--brand); border-color: var(--brand); box-shadow: 0 0 12px rgba(255,122,69,0.4); }
 .pin-error { color: var(--red); font-size: 13px; text-align: center; min-height: 20px; margin-bottom: 8px; }
 .pin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.pin-key { height: 72px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); font-size: 24px; font-weight: 500; }
-.pin-key:active { background: var(--surface-3); transform: scale(0.95); }
+.pin-key {
+  height: 72px;
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--surface-2) 92%, #fff 8%),
+      var(--surface-2)
+    );
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text);
+  transition: transform 80ms, background 120ms, box-shadow 120ms, border-color 120ms;
+}
+.pin-key:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.pin-key:active {
+  background: color-mix(in srgb, var(--brand) 16%, var(--surface-3));
+  border-color: var(--brand);
+  transform: scale(0.94);
+}
 .pin-key.muted { color: var(--text-3); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
 .pin-hint { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 11px; text-align: center; line-height: 1.7; }
 .pin-hint code { font-family: var(--font-mono); background: var(--surface-2); padding: 1px 6px; border-radius: 4px; color: var(--text-2); }
@@ -1414,6 +1506,19 @@ main {
   flex: 0 0 auto;            /* don't shrink — let them overflow & scroll */
   white-space: nowrap;
   scroll-snap-align: start;
+}
+/* Misc item — a distinct dashed chip so it reads as "add custom" not a category */
+.cat-chip--misc {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.cat-chip--misc:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
 }
 .menu-items-grid {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
@@ -5263,4 +5368,75 @@ select:focus {
 .btn-success {
   /* keep the green tint but ensure the label is bright + legible */
   text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MODE SWITCHER — clickable mode pill dropdown (no re-auth between modes)
+   ════════════════════════════════════════════════════════════════════════════ */
+.mode-pill--switchable {
+  cursor: pointer;
+  border: none;
+  font: inherit;
+  transition: filter 120ms, transform 80ms;
+}
+.mode-pill--switchable:hover { filter: brightness(1.1); }
+.mode-pill--switchable:active { transform: scale(0.97); }
+.mode-pill-caret {
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.mode-switch-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  width: 248px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  padding: 8px;
+  animation: slideDown 180ms cubic-bezier(0.34,1.4,0.64,1);
+}
+.mode-switch-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding: 8px 10px 6px;
+}
+.mode-switch-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms;
+  text-align: left;
+}
+.mode-switch-item:hover { background: var(--surface-2); }
+.mode-switch-item.active {
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  color: var(--brand);
+}
+.mode-switch-icon { font-size: 18px; }
+.mode-switch-check { margin-left: auto; font-weight: 800; }
+.mode-switch-note {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+  padding: 8px 10px 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
 }

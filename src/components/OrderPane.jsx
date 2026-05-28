@@ -138,24 +138,13 @@ export default function OrderPane({
             onClick={() => { setActiveCat(c.id); setSearch(''); }}
           >{c.name}</button>
         ))}
+        <button className="cat-chip cat-chip--misc" onClick={() => setShowMisc(true)}>
+          + Misc item
+        </button>
       </div>
       <div className="menu-items-grid">
         {filteredItems.map(it => <MenuItemCard key={it.id} item={it} onTap={handleItemTap} />)}
         {filteredItems.length === 0 && <div className="empty" style={{ gridColumn: '1/-1' }}><p>No items match.</p></div>}
-        {/* Misc item button — always visible at end of grid */}
-        <button
-          className="menu-item-card menu-item-card--misc"
-          onClick={() => setShowMisc(true)}
-        >
-          <div className="card-body">
-            <div className="station">misc</div>
-            <div className="name">+ Miscellaneous Item</div>
-          </div>
-          <div className="card-footer">
-            <div className="price" style={{ color: 'var(--text-3)' }}>custom $</div>
-            <div className="add-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', boxShadow: 'none' }}>+</div>
-          </div>
-        </button>
       </div>
     </div>
   );
@@ -259,23 +248,13 @@ export default function OrderPane({
                 onClick={() => { setActiveCat(c.id); setSearch(''); }}
               >{c.name}</button>
             ))}
+            <button className="cat-chip cat-chip--misc" onClick={() => setShowMisc(true)}>
+              + Misc item
+            </button>
           </div>
           <div className="menu-items-grid">
             {filteredItems.map(it => <MenuItemCard key={it.id} item={it} onTap={handleItemTap} />)}
             {filteredItems.length === 0 && <div className="empty" style={{ gridColumn: '1/-1' }}><p>No items match.</p></div>}
-            <button
-              className="menu-item-card menu-item-card--misc"
-              onClick={() => setShowMisc(true)}
-            >
-              <div className="card-body">
-                <div className="station">misc</div>
-                <div className="name">+ Miscellaneous Item</div>
-              </div>
-              <div className="card-footer">
-                <div className="price" style={{ color: 'var(--text-3)' }}>custom $</div>
-                <div className="add-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-2)', boxShadow: 'none' }}>+</div>
-              </div>
-            </button>
           </div>
         </div>
 

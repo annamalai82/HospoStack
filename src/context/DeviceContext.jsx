@@ -56,8 +56,16 @@ export function DeviceProvider({ children }) {
     setDevice({ ...device, venueId, venueName });
   };
 
+  // Switch operating mode WITHOUT logging out — the user session is preserved.
+  // Used by the in-app mode switcher (Kitchen / Floor / Till). Config mode is
+  // NOT switchable this way; it stays manager-gated through its own flow.
+  const switchMode = (mode) => {
+    if (!device) return;
+    setDevice({ ...device, mode });
+  };
+
   return (
-    <DeviceContext.Provider value={{ device, configure, login, logout, reset, switchVenue }}>
+    <DeviceContext.Provider value={{ device, configure, login, logout, reset, switchVenue, switchMode }}>
       {children}
     </DeviceContext.Provider>
   );

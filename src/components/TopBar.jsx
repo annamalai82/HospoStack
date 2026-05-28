@@ -7,16 +7,31 @@ import ConnectionIndicator from './ConnectionIndicator';
 const GROUPS = ['Base', 'Indian Luxury', 'Fast Casual', 'Vibrant', 'Operational'];
 
 export default function TopBar() {
-  const { device, logout } = useDevice();
+  const { device, logout, switchMode } = useDevice();
   const { theme, setTheme } = useTheme();
   const [showHub, setShowHub]       = useState(false);
   const [showTheme, setShowTheme]   = useState(false);
+  const [showModes, setShowModes]   = useState(false);
 
   const initials = (device.user?.name || '?')
     .split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
 
   const isManager   = device.user?.role === 'manager';
+  const isKitchen   = device.user?.role === 'kitchen';
   const currentTheme = THEMES.find(t => t.id === theme) || THEMES[0];
+
+  // Which modes can the current user switch to without re-auth?
+  // Kitchen staff → kitchen only. Everyone else (waiter/cashier/manager)
+  // → kitchen/floor/till freely. Config is manager-only and reached via ⚙.
+  const SWITCHABLE = [
+    { id: 'till',    label: 'Till POS',     icon: '🧾' },
+    { id: 'floor',   label: 'Floor / Table', icon: '🪑' },
+    { id: 'kitchen', label: 'Kitchen',       icon: '🍳' },
+  ];
+  const availableModes = isKitchen
+    ? SWITCHABLE.filter(m => m.id === 'kitchen')
+    : SWITCHABLE;
+  const canSwitch = availableModes.length > 1;
 
   return (
     <>
@@ -31,17 +46,50 @@ export default function TopBar() {
           </span>
         </div>
 
-        {/* Mode pill — centre */}
+        {/* Mode pill — centre — clickable switcher */}
         <div className="topbar-center">
           <ConnectionIndicator />
-          <span className={`mode-pill ${device.mode}`}>
-            <span className="pin" />
-            {device.mode === 'kitchen' ? 'Kitchen'
-              : device.mode === 'floor' ? 'Floor'
-              : device.mode === 'config' ? 'Config'
-              : 'Till'}
-            <span className="device-name">· {device.deviceName}</span>
-          </span>
+          <div style={{ position: 'relative' }}>
+            <button
+              className={`mode-pill ${device.mode} ${canSwitch ? 'mode-pill--switchable' : ''}`}
+              onClick={() => canSwitch && setShowModes(v => !v)}
+              disabled={!canSwitch}
+            >
+              <span className="pin" />
+              {device.mode === 'kitchen' ? 'Kitchen'
+                : device.mode === 'floor' ? 'Floor'
+                : device.mode === 'config' ? 'Config'
+                : 'Till'}
+              <span className="device-name">· {device.deviceName}</span>
+              {canSwitch && <span className="mode-pill-caret">▾</span>}
+            </button>
+
+            {showModes && canSwitch && (
+              <>
+                <div className="mode-switch-dropdown" onClick={e => e.stopPropagation()}>
+                  <div className="mode-switch-head">Switch mode</div>
+                  {availableModes.map(m => (
+                    <button
+                      key={m.id}
+                      className={`mode-switch-item ${device.mode === m.id ? 'active' : ''}`}
+                      onClick={() => { switchMode(m.id); setShowModes(false); }}
+                    >
+                      <span className="mode-switch-icon">{m.icon}</span>
+                      <span>{m.label}</span>
+                      {device.mode === m.id && <span className="mode-switch-check">✓</span>}
+                    </button>
+                  ))}
+                  <div className="mode-switch-note">
+                    Switching keeps you signed in. Config &amp; settings stay under the ⚙ menu.
+                  </div>
+                </div>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 199 }}
+                  onClick={() => setShowModes(false)}
+                />
+              </>
+            )}
+          </div>
         </div>
 
         {/* Right — user chip + theme + manager + lock */}
