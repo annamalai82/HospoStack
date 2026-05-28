@@ -1009,6 +1009,7 @@ main {
 .cat-chip {
   padding: 8px 18px;
   border-radius: 999px;
+  flex: 0 0 auto;
   /* Use same guaranteed-contrast tokens as .btn */
   border: 1.5px solid var(--btn-border);
   background: var(--btn-bg);
@@ -1393,8 +1394,27 @@ main {
   display: flex; flex-direction: column; gap: 8px; padding: 10px;
 }
 .menu-search input { margin-bottom: 0; }
-.menu-cat-bar { display: flex; gap: 6px; overflow-x: auto; }
+.menu-cat-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS/iPad */
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding-bottom: 4px;                  /* room so chips aren't clipped */
+  scrollbar-width: none;                /* Firefox */
+  /* Fade hint on the right edge to show there's more to scroll */
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%);
+          mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%);
+}
 .menu-cat-bar::-webkit-scrollbar { display: none; }
+.cat-chip {
+  flex: 0 0 auto;            /* don't shrink — let them overflow & scroll */
+  white-space: nowrap;
+  scroll-snap-align: start;
+}
 .menu-items-grid {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
   padding-bottom: max(80px, calc(env(safe-area-inset-bottom) + 70px));
