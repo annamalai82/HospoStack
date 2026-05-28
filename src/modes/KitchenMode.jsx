@@ -16,39 +16,67 @@ const DEFAULT_WARN_MINS  = 8;
 const DEFAULT_ALERT_MINS = 20;
 const EXTEND_MINS = 5;
 
-/* ── Alert sound synthesised via Web Audio API (no file needed) ─────────── */
-function playAlertSound(type = 'new') {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
+/* ── Continuous alert beep — loops until acknowledged ───────────────────────
+   Returns a controller with start()/stop(). Uses a single AudioContext and
+   schedules a repeating two-tone beep every ~1.2s while active. */
+function createBeepLoop() {
+  let ctx = null;
+  let timer = null;
+  let active = false;
 
-    if (type === 'new') {
-      // Two rising tones — unmistakable "new order" ping
-      [[0, 880], [0.15, 1100]].forEach(([offset, freq]) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + offset);
-        gain.gain.setValueAtTime(0.5, now + offset);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.35);
-        osc.start(now + offset);
-        osc.stop(now + offset + 0.35);
-      });
-    } else {
-      // Single lower tone — "order modified"
+  const beepOnce = () => {
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Two rising tones — "new order" ping
+    [[0, 880], [0.15, 1100]].forEach(([offset, freq]) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(660, now);
-      gain.gain.setValueAtTime(0.4, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      osc.start(now);
-      osc.stop(now + 0.4);
-    }
-    // Auto-close context after sound finishes
-    setTimeout(() => ctx.close(), 800);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + offset);
+      gain.gain.setValueAtTime(0.5, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.32);
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.32);
+    });
+  };
+
+  return {
+    start() {
+      if (active) return;
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        // Some browsers start suspended until a user gesture — try to resume
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        active = true;
+        beepOnce();                       // immediate first beep
+        timer = setInterval(beepOnce, 1200); // then repeat
+      } catch (_) { /* audio unavailable */ }
+    },
+    stop() {
+      active = false;
+      if (timer) { clearInterval(timer); timer = null; }
+      if (ctx) { ctx.close().catch(() => {}); ctx = null; }
+    },
+    isActive() { return active; }
+  };
+}
+
+/* One-shot sound for modifications (less intrusive than the new-order loop) */
+function playModifiedSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(660, now);
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.4);
+    setTimeout(() => ctx.close(), 600);
   } catch (_) { /* audio not available */ }
 }
 
@@ -75,7 +103,23 @@ export default function KitchenMode() {
   // Alert system: track fingerprints to detect modifications
   const fingerprintRef = useRef({});         // orderId -> last fingerprint
   const [alertQueue, setAlertQueue] = useState([]); // { id, type: 'new'|'modified' }
-  const [flashIds, setFlashIds] = useState(new Set()); // orderIds currently flashing
+  // Orders that are NEW and not yet acknowledged — these blink continuously
+  // and keep the beep looping until the kitchen taps them.
+  const [unackedIds, setUnackedIds] = useState(new Set());
+  const beepRef = useRef(null);
+
+  // Create the beep loop controller once
+  useEffect(() => {
+    beepRef.current = createBeepLoop();
+    return () => beepRef.current?.stop();
+  }, []);
+
+  // Start/stop the continuous beep based on whether any order is unacknowledged
+  useEffect(() => {
+    if (!beepRef.current) return;
+    if (unackedIds.size > 0) beepRef.current.start();
+    else                     beepRef.current.stop();
+  }, [unackedIds]);
 
   const venueId = device?.venueId;
   useEffect(() => { if (!venueId) return; return watchKitchenOrders(setOrders); }, [venueId]);
@@ -148,20 +192,53 @@ export default function KitchenMode() {
     });
 
     if (newAlerts.length > 0) {
-      // Play sound — use type of first alert (new takes priority)
-      const type = newAlerts.some(a => a.type === 'new') ? 'new' : 'modified';
-      playAlertSound(type);
+      const newOrderIds = newAlerts.filter(a => a.type === 'new').map(a => a.id);
+      const hasNew = newOrderIds.length > 0;
+
+      if (hasNew) {
+        // New orders → add to unacknowledged set (blinks + beeps until tapped)
+        setUnackedIds(prev => {
+          const next = new Set(prev);
+          newOrderIds.forEach(id => next.add(id));
+          return next;
+        });
+      } else {
+        // Only modifications → a single soft tone, no continuous alert
+        playModifiedSound();
+      }
 
       // Android background notification (no-op if app is foreground / web)
-      sendKOTNotification({ type, count: newAlerts.filter(a => a.type === 'new').length });
-
-      // Flash the affected tickets
-      const ids = new Set(newAlerts.map(a => a.id));
-      setFlashIds(ids);
-      setTimeout(() => setFlashIds(new Set()), 2500);
+      sendKOTNotification({ type: hasNew ? 'new' : 'modified', count: newOrderIds.length });
 
       setAlertQueue(prev => [...prev, ...newAlerts]);
     }
+  }, [tickets]);
+
+  // Acknowledge a single order — stops its blink (and the beep if it was last)
+  const acknowledgeOrder = (id) => {
+    setUnackedIds(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    // Also clear it from the alert banner queue
+    setAlertQueue(prev => prev.filter(a => a.id !== id));
+  };
+
+  // Clean up unacked IDs for orders that no longer exist (paid/voided/cleared)
+  useEffect(() => {
+    setUnackedIds(prev => {
+      if (prev.size === 0) return prev;
+      const liveIds = new Set(tickets.map(t => t.order.id));
+      let changed = false;
+      const next = new Set();
+      prev.forEach(id => {
+        if (liveIds.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
   }, [tickets]);
 
   const toggleCollapse   = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
@@ -178,8 +255,8 @@ export default function KitchenMode() {
 
   const allCollapsed = tickets.length > 0 && tickets.every(t => collapsed[t.order.id]);
 
-  // Dismiss all alerts
-  const dismissAlerts = () => setAlertQueue([]);
+  // Dismiss all alerts — acknowledges every blinking order + stops the beep
+  const dismissAlerts = () => { setAlertQueue([]); setUnackedIds(new Set()); };
 
   return (
     <div className="kds">
@@ -251,7 +328,8 @@ export default function KitchenMode() {
               collapsed={!!collapsed[t.order.id]}
               onToggleCollapse={() => toggleCollapse(t.order.id)}
               tables={tables}
-              flashing={flashIds.has(t.order.id)}
+              unacked={unackedIds.has(t.order.id)}
+              onAcknowledge={() => acknowledgeOrder(t.order.id)}
             />
           ))}
         </div>
@@ -273,7 +351,7 @@ export default function KitchenMode() {
 }
 
 /* ── Ticket ──────────────────────────────────────────────────────────── */
-function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapsed, onToggleCollapse, tables, flashing }) {
+function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapsed, onToggleCollapse, tables, unacked, onAcknowledge }) {
   // Own 1-second interval so the clock actually ticks every second
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -337,10 +415,21 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
   const typeBadge = isDineIn ? 'DINE-IN' : 'TAKEAWAY';
 
   return (
-    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'} ${flashing ? 'kds-ticket--flash' : ''}`}>
+    <div className={`kds-ticket ${cls} ${collapsed ? 'collapsed' : ''} ${isDineIn ? 'kds-ticket--dinein' : 'kds-ticket--takeaway'} ${unacked ? 'kds-ticket--alert' : ''}`}>
+
+      {/* New-order acknowledgement banner — tap to stop blink + beep */}
+      {unacked && (
+        <button className="kds-ticket-ack" onClick={onAcknowledge} title="Tap to acknowledge">
+          <span className="kds-ticket-ack-pulse">🔔</span>
+          <span>NEW ORDER — tap to acknowledge</span>
+        </button>
+      )}
 
       {/* ── Header ── */}
-      <button className="kds-ticket-head" onClick={onToggleCollapse}>
+      <button
+        className="kds-ticket-head"
+        onClick={() => { if (unacked) onAcknowledge(); onToggleCollapse(); }}
+      >
         <div className="kds-ticket-head-left">
           <div className={`kds-type-badge ${isDineIn ? 'dinein' : 'takeaway'}`}>
             {isDineIn ? '🍽' : '🥡'} {typeBadge}

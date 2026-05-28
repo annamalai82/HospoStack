@@ -61,7 +61,7 @@ export default function TopBar() {
                 : device.mode === 'config' ? 'Config'
                 : 'Till'}
               <span className="device-name">· {device.deviceName}</span>
-              {canSwitch && <span className="mode-pill-caret">▾</span>}
+              {canSwitch && <span className="mode-pill-caret">⇄</span>}
             </button>
 
             {showModes && canSwitch && (
