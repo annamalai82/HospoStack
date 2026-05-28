@@ -691,22 +691,25 @@ main {
 .btn:disabled::after,  .btn[disabled]::after { display: none; }
 
 /* ── PRIMARY — brand-coloured with strong glow ──────────────────────────── */
+/* White text on ALL themes for consistent visibility. To guarantee white is
+   always legible (even on light gold/yellow brands), the gradient darkens the
+   brand toward its deep end and a subtle dark scrim sits under the label. */
 .btn-primary {
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--brand) 88%, #fff 12%) 0%,
-      var(--brand) 50%,
-      color-mix(in srgb, var(--brand) 88%, #000 12%) 100%
+      color-mix(in srgb, var(--brand) 82%, #000 18%) 0%,
+      color-mix(in srgb, var(--brand) 88%, #000 12%) 50%,
+      color-mix(in srgb, var(--brand) 70%, #000 30%) 100%
     );
-  color: var(--btn-primary-text) !important;
-  border-color: color-mix(in srgb, var(--brand) 60%, #fff 40%);
+  color: #ffffff !important;
+  border-color: color-mix(in srgb, var(--brand) 70%, #fff 30%);
   font-weight: 800;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.55);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.25) inset,
-    0 1px 0 rgba(255,255,255,0.40) inset,
-    0 4px 16px rgba(0,0,0,0.25),
+    0 0 0 1px rgba(255,255,255,0.22) inset,
+    0 1px 0 rgba(255,255,255,0.38) inset,
+    0 4px 16px rgba(0,0,0,0.28),
     0 0 28px color-mix(in srgb, var(--brand) 50%, transparent),
     0 0 0 transparent;
 }
@@ -721,17 +724,17 @@ main {
   opacity: 0.7;
 }
 .btn-primary:hover {
-  filter: brightness(1.08) saturate(1.1);
+  filter: brightness(1.10) saturate(1.08);
   transform: translateY(-2px);
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--brand-2, var(--brand)) 100%, transparent) 0%,
-      var(--brand) 55%,
-      color-mix(in srgb, var(--brand) 75%, #000) 100%
+      color-mix(in srgb, var(--brand) 82%, #000 18%) 0%,
+      color-mix(in srgb, var(--brand) 88%, #000 12%) 50%,
+      color-mix(in srgb, var(--brand) 70%, #000 30%) 100%
     );
-  color: var(--btn-primary-text) !important;
-  border-color: color-mix(in srgb, var(--brand) 60%, #fff 40%);
+  color: #ffffff !important;
+  border-color: color-mix(in srgb, var(--brand) 55%, #fff 45%);
   box-shadow:
     0 0 0 1px rgba(255,255,255,0.30) inset,
     0 1px 0 rgba(255,255,255,0.45) inset,
@@ -748,7 +751,7 @@ main {
     0 -1px 0 rgba(0,0,0,0.30) inset,
     0 2px 8px rgba(0,0,0,0.30),
     0 0 12px color-mix(in srgb, var(--brand) 30%, transparent);
-  color: var(--btn-primary-text) !important;
+  color: #ffffff !important;
 }
 
 /* ── DANGER ──────────────────────────────────────────────────────────────── */
@@ -5199,4 +5202,45 @@ select:focus {
   color: var(--brand);
   border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
   min-height: var(--tap);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   GLOBAL PRIMARY BUTTON — white text on every theme (overrides per-theme)
+   ─────────────────────────────────────────────────────────────────────────
+   The user wants the primary action button (Send to Kitchen, etc.) to show
+   WHITE text consistently across ALL 17 themes. Some themes previously used
+   dark text on light gold/yellow brands. This block — placed last and scoped
+   to [data-theme] for specificity — darkens the brand gradient enough that
+   white text reads clearly, then forces white on every theme.
+   ════════════════════════════════════════════════════════════════════════════ */
+[data-theme] .btn-primary,
+.btn-primary {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.55) !important;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--brand) 80%, #000 20%) 0%,
+      color-mix(in srgb, var(--brand) 86%, #000 14%) 50%,
+      color-mix(in srgb, var(--brand) 66%, #000 34%) 100%
+    ) !important;
+  border-color: color-mix(in srgb, var(--brand) 65%, #fff 35%) !important;
+}
+[data-theme] .btn-primary:hover,
+.btn-primary:hover {
+  color: #ffffff !important;
+  filter: brightness(1.12) saturate(1.06);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--brand) 84%, #000 16%) 0%,
+      color-mix(in srgb, var(--brand) 90%, #000 10%) 50%,
+      color-mix(in srgb, var(--brand) 70%, #000 30%) 100%
+    ) !important;
+}
+/* Send + Pay (success) button — also force white for consistency */
+[data-theme] .btn-success,
+.btn-success {
+  /* keep the green tint but ensure the label is bright + legible */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
 }
