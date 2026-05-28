@@ -105,6 +105,7 @@ export default function ModifierPicker({ item, onCancel, onConfirm }) {
       basePrice: item.price ?? 0,
       station: item.station ?? 'kitchen',
       course: item.course ?? 'main',
+      allergens: item.allergens ?? [],
       selections: sel,
       notes: notes.trim(),
       modifiersPriceDelta: priceDelta,

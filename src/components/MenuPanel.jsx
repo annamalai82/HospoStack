@@ -226,7 +226,14 @@ function ItemEditModal({ item, cats, modifierGroups = [], onClose, onSave }) {
   const [station, setStation] = useState(item.station || 'kitchen');
   const [active, setActive] = useState(item.active !== false);
   const [modifierGroupIds, setModifierGroupIds] = useState(item.modifierGroupIds || []);
+  const [allergens, setAllergens] = useState(item.allergens || []);
   const [err, setErr] = useState('');
+
+  const ALLERGEN_OPTIONS = ['gluten', 'dairy', 'nuts', 'peanuts', 'egg', 'soy', 'fish', 'shellfish', 'sesame'];
+  const DIETARY_OPTIONS  = ['vegan', 'vegetarian', 'halal'];
+  const toggleAllergen = (a) => {
+    setAllergens(allergens.includes(a) ? allergens.filter(x => x !== a) : [...allergens, a]);
+  };
 
   const toggleGroup = (gid) => {
     setModifierGroupIds(modifierGroupIds.includes(gid)
@@ -242,7 +249,7 @@ function ItemEditModal({ item, cats, modifierGroups = [], onClose, onSave }) {
     if (!categoryId) return setErr('Pick a category');
     await onSave({
       name: name.trim(), categoryId, price: p, course, station, active,
-      modifierGroupIds, taxPct: 10
+      modifierGroupIds, allergens, taxPct: 10
     });
   };
 
@@ -348,6 +355,39 @@ function ItemEditModal({ item, cats, modifierGroups = [], onClose, onSave }) {
             </p>
           </>
         )}
+      </div>
+
+      <div className="field" style={{ marginTop: 4 }}>
+        <label>Allergens &amp; dietary flags</label>
+        <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '0 0 8px' }}>
+          These appear as warnings on the kitchen ticket. Safety-critical — flag anything the dish contains.
+        </p>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Contains</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+          {ALLERGEN_OPTIONS.map(a => {
+            const sel = allergens.includes(a);
+            return (
+              <button key={a} type="button" onClick={() => toggleAllergen(a)}
+                className={`cat-chip ${sel ? 'active' : ''}`}
+                style={{ padding: '6px 12px', fontSize: 12, textTransform: 'capitalize',
+                  ...(sel ? { borderColor: 'var(--red)', color: 'var(--red)', background: 'color-mix(in srgb, var(--red) 10%, transparent)' } : {}) }}
+              >{sel ? '⚠ ' : '+ '}{a}</button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Dietary</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {DIETARY_OPTIONS.map(a => {
+            const sel = allergens.includes(a);
+            return (
+              <button key={a} type="button" onClick={() => toggleAllergen(a)}
+                className={`cat-chip ${sel ? 'active' : ''}`}
+                style={{ padding: '6px 12px', fontSize: 12, textTransform: 'capitalize',
+                  ...(sel ? { borderColor: 'var(--green)', color: 'var(--green)', background: 'color-mix(in srgb, var(--green) 10%, transparent)' } : {}) }}
+              >{sel ? '✓ ' : '+ '}{a}</button>
+            );
+          })}
+        </div>
       </div>
 
       {err && <div style={{ color: 'var(--red)', fontSize: 13 }}>{err}</div>}

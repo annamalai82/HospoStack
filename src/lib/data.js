@@ -191,6 +191,49 @@ export function watchMenuItems(cb) {
   });
 }
 
+// ── 86 / Out-of-stock alerts ────────────────────────────────────────────────
+//
+// The kitchen can "86" an item (restaurant slang for out-of-stock). This:
+//   1. Sets outOfStock=true on the menu item → it shows as unavailable in
+//      Till/Floor and can't be added to new orders
+//   2. Writes an entry to the '86_alerts' collection → an instant banner +
+//      beep fires on every Floor and Till device
+//
+// Re-stocking ("un-86") flips outOfStock back to false and logs a restock
+// alert so staff know it's available again.
+
+/** Mark an item out of stock (86) or back in stock. Writes an alert either way. */
+export async function set86Status(item, outOfStock, byName = 'Kitchen') {
+  // Update the item flag
+  await updateDoc(doc(db, 'venues', _venueId, 'menu_items', item.id), {
+    outOfStock,
+    outOfStockAt: outOfStock ? serverTimestamp() : null,
+  });
+  // Write an alert for floor/till devices to pick up
+  await addDoc(col('stock_alerts'), {
+    itemId:   item.id,
+    itemName: item.name,
+    action:   outOfStock ? '86' : 'restock',
+    byName,
+    createdAt: serverTimestamp(),
+    createdAtMs: Date.now(),
+  });
+}
+
+/** Watch recent 86/restock alerts (last 15 min) for the floor/till banner. */
+export function watchStockAlerts(cb, windowMins = 15) {
+  return onSnapshot(
+    query(col('stock_alerts'), orderBy('createdAtMs', 'desc')),
+    s => {
+      const since = Date.now() - windowMins * 60_000;
+      cb(s.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(a => (a.createdAtMs || 0) >= since)
+      );
+    }
+  );
+}
+
 // ── Tables ─────────────────────────────────────────────────────────────────
 export function watchTables(cb) {
   return onSnapshot(query(col('tables'), orderBy('number')), s => {

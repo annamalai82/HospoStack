@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   watchKitchenOrders, bumpOrderItem, updateOrder,
-  extendOrderWait, watchVenue, updateVenue, watchTables
+  extendOrderWait, watchVenue, updateVenue, watchTables,
+  watchMenuItems, set86Status
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import { sendKOTNotification } from '../lib/native';
@@ -95,6 +96,8 @@ export default function KitchenMode() {
   const [station, setStation]   = useState('all');
   const [venue, setVenue]       = useState(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [menuItems, setMenuItems]   = useState([]);
+  const [show86, setShow86]         = useState(false);
   // collapsed: orderId -> bool. Default true (collapsed) for busy-day UX.
   const [collapsed, setCollapsed] = useState({});
   // Track which orderIds we've seen so new ones default to expanded
@@ -125,6 +128,7 @@ export default function KitchenMode() {
   useEffect(() => { if (!venueId) return; return watchKitchenOrders(setOrders); }, [venueId]);
   useEffect(() => { if (!venueId) return; return watchVenue(setVenue); }, [venueId]);
   useEffect(() => { if (!venueId) return; return watchTables(setTables); }, [venueId]);
+  useEffect(() => { if (!venueId) return; return watchMenuItems(setMenuItems); }, [venueId]);
 
   const alertMins = venue?.kdsAlertMins ?? DEFAULT_ALERT_MINS;
   const warnMins  = venue?.kdsWarnMins  ?? DEFAULT_WARN_MINS;
@@ -304,6 +308,16 @@ export default function KitchenMode() {
             </button>
           )}
           <button
+            onClick={() => setShow86(true)}
+            className="kds-86-btn"
+            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6 }}
+          >
+            🚫 86 Items
+            {menuItems.filter(i => i.outOfStock).length > 0 && (
+              <span className="kds-86-count">{menuItems.filter(i => i.outOfStock).length}</span>
+            )}
+          </button>
+          <button
             onClick={() => setShowConfig(true)}
             style={{ fontSize: 11, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-3)' }}
           >⚙ Timers</button>
@@ -344,6 +358,14 @@ export default function KitchenMode() {
             setShowConfig(false);
           }}
           onClose={() => setShowConfig(false)}
+        />
+      )}
+
+      {show86 && (
+        <Stock86Modal
+          items={menuItems}
+          byName={device?.user?.name || 'Kitchen'}
+          onClose={() => setShow86(false)}
         />
       )}
     </div>
@@ -457,6 +479,28 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
       {/* ── Items ── */}
       {!collapsed && (
         <>
+          {/* Order-level allergy alert — from booking note OR any item allergen */}
+          {(() => {
+            const itemAllergens = [...new Set(
+              visibleIndices.flatMap(i => allItems[i].allergens || [])
+            )];
+            const note = order.allergyNote || order.customerAllergies;
+            if (!note && itemAllergens.length === 0) return null;
+            return (
+              <div className="kds-allergy-banner">
+                <span className="kds-allergy-icon">⚠</span>
+                <div>
+                  <div className="kds-allergy-title">ALLERGEN ALERT</div>
+                  {note && <div className="kds-allergy-note">Customer: {note}</div>}
+                  {itemAllergens.length > 0 && (
+                    <div className="kds-allergy-tags">
+                      {itemAllergens.map(a => <span key={a}>{a}</span>)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           <div className="kds-items">
             {visibleIndices.map(idx => {
               const it = allItems[idx];
@@ -466,6 +510,13 @@ function Ticket({ order, allItems, visibleIndices, warnMins, alertMins, collapse
                   <span className="label">
                     {it.name}
                     {it.isMisc && <span style={{ fontSize: 10, color: 'var(--amber)', marginLeft: 6, fontWeight: 600 }}>MISC</span>}
+                    {(it.allergens || []).length > 0 && (
+                      <span className="kds-item-allergens">
+                        {it.allergens.map(a => (
+                          <span key={a} className="kds-allergen-tag">⚠ {a}</span>
+                        ))}
+                      </span>
+                    )}
                     {(it.selections || []).length > 0 && (
                       <span style={{ display: 'block', fontSize: 12, color: 'var(--blue)', marginTop: 2, fontWeight: 500 }}>
                         {it.selections.map(s => s.label).join(' · ')}
@@ -628,6 +679,88 @@ function WaitConfigModal({ warnMins, alertMins, onSave, onClose }) {
             const a = Math.max(w + 1, parseInt(alert) || 20);
             onSave(w, a);
           }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 86 / Out-of-stock manager modal ──────────────────────────────────────
+   Kitchen taps an item to toggle it out of stock. Toggling fires a stock
+   alert (banner + beep) on every Floor & Till device instantly. */
+function Stock86Modal({ items, byName, onClose }) {
+  const [search, setSearch] = useState('');
+  const [busy, setBusy]     = useState(null); // itemId being toggled
+
+  const sorted = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return [...items]
+      .filter(i => !q || i.name.toLowerCase().includes(q))
+      // Out-of-stock first, then alphabetical
+      .sort((a, b) => {
+        if (!!a.outOfStock !== !!b.outOfStock) return a.outOfStock ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [items, search]);
+
+  const toggle = async (item) => {
+    setBusy(item.id);
+    try {
+      await set86Status(item, !item.outOfStock, byName);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const oosCount = items.filter(i => i.outOfStock).length;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="stock86-modal" onClick={e => e.stopPropagation()}>
+        <div className="stock86-head">
+          <div>
+            <h3 style={{ margin: 0 }}>🚫 86 / Out of stock</h3>
+            <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4 }}>
+              Tap an item to toggle. Waiters &amp; cashiers are alerted instantly.
+              {oosCount > 0 && <b style={{ color: 'var(--red)' }}> · {oosCount} currently 86'd</b>}
+            </div>
+          </div>
+          <button className="icon-btn" onClick={onClose}>×</button>
+        </div>
+
+        <div className="stock86-search">
+          <input
+            placeholder="Search menu items…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div className="stock86-list">
+          {sorted.length === 0 && (
+            <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-3)' }}>
+              No items match.
+            </div>
+          )}
+          {sorted.map(item => (
+            <button
+              key={item.id}
+              className={`stock86-item ${item.outOfStock ? 'is-oos' : ''}`}
+              onClick={() => toggle(item)}
+              disabled={busy === item.id}
+            >
+              <div className="stock86-item-info">
+                <span className="stock86-item-name">{item.name}</span>
+                <span className="stock86-item-station">{item.station}</span>
+              </div>
+              <span className={`stock86-toggle ${item.outOfStock ? 'on' : ''}`}>
+                {busy === item.id
+                  ? '…'
+                  : item.outOfStock ? '86 — OUT' : 'In stock'}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
     </div>

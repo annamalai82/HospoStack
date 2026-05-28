@@ -9,6 +9,7 @@ import {
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
 import DiscountModal from '../components/DiscountModal';
+import StockAlertBanner from '../components/StockAlertBanner';
 
 /**
  * Till POS flow (two-step):
@@ -134,6 +135,7 @@ export default function TillMode() {
         price: item.price ?? 0,
         station: item.station ?? 'kitchen',
         course: item.course ?? 'main',
+        allergens: item.allergens ?? [],
         selections: [],
         notes: '',
         status: 'pending'
@@ -573,6 +575,7 @@ export default function TillMode() {
 
   return (
     <div className="till">
+      <StockAlertBanner />
       {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
 
       <div className="till-layout">

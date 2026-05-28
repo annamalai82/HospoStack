@@ -426,18 +426,30 @@ function MiscItemModal({ onCancel, onConfirm }) {
 
 function MenuItemCard({ item: it, onTap }) {
   const hasOptions = (it.modifierGroupIds || []).length > 0;
-  // Clean the display name — strip protein variants from the name itself
-  // (they live in the modifier group, not the name)
   const displayName = it.name;
+  const oos = !!it.outOfStock;
+  const allergens = it.allergens || [];
 
   return (
-    <button className="menu-item-card" onClick={() => onTap(it)}>
+    <button
+      className={`menu-item-card ${oos ? 'menu-item-card--oos' : ''}`}
+      onClick={() => { if (!oos) onTap(it); }}
+      disabled={oos}
+    >
+      {oos && <div className="oos-badge">86 · OUT OF STOCK</div>}
       <div className="card-body">
         <div className="station">
           {it.station}
         </div>
         <div className="name">{displayName}</div>
-        {hasOptions && (
+        {allergens.length > 0 && (
+          <div className="allergen-row">
+            {allergens.map(a => (
+              <span key={a} className="allergen-chip" title={a}>{ALLERGEN_ICONS[a] || '⚠'} {a}</span>
+            ))}
+          </div>
+        )}
+        {hasOptions && !oos && (
           <div className="options-badge">
             ⚡ Options available
           </div>
@@ -448,11 +460,18 @@ function MenuItemCard({ item: it, onTap }) {
           {hasOptions && <span className="price-from">from </span>}
           ${it.price.toFixed(2)}
         </div>
-        <div className="add-icon">+</div>
+        <div className="add-icon">{oos ? '✕' : '+'}</div>
       </div>
     </button>
   );
 }
+
+// Allergen icon map — shared across menu cards + KDS tickets
+export const ALLERGEN_ICONS = {
+  'gluten': '🌾', 'dairy': '🥛', 'nuts': '🥜', 'peanuts': '🥜',
+  'egg': '🥚', 'soy': '🫘', 'fish': '🐟', 'shellfish': '🦐',
+  'sesame': '◯', 'vegan': '🌱', 'vegetarian': '🥬', 'halal': '☪',
+};
 
 function CartRow({ line, isSent, isEditing, onEdit, onDone, onInc, onDec, onRemove, onNoteChange }) {
   const selections = line.selections || [];

@@ -6,6 +6,7 @@ import {
 } from '../lib/data';
 import { useDevice } from '../context/DeviceContext';
 import OrderPane from '../components/OrderPane';
+import StockAlertBanner from '../components/StockAlertBanner';
 import { VoidConfirmModal } from './TillMode';
 
 export default function FloorMode() {
@@ -84,6 +85,7 @@ export default function FloorMode() {
       return [...c, {
         itemId: item.id, name: item.name, qty: 1,
         price: item.price, station: item.station, course: item.course,
+        allergens: item.allergens ?? [],
         notes: '', status: 'pending'
       }];
     });
@@ -243,6 +245,7 @@ export default function FloorMode() {
 
   return (
     <div className="floor">
+      <StockAlertBanner />
       {toast && <div className={`toast ${toast.kind}`}>{toast.msg}</div>}
       <div className="floor-toolbar">
         <div className="zone-tabs">
