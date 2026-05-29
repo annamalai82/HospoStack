@@ -234,6 +234,69 @@ export function watchStockAlerts(cb, windowMins = 15) {
   );
 }
 
+// ── Lost & found ─────────────────────────────────────────────────────────
+// Doc shape: {
+//   description, location, foundBy, photoDataUrl (base64), notes,
+//   status: 'unclaimed' | 'claimed' | 'discarded',
+//   foundAt (Timestamp), foundAtMs,
+//   claimedBy, claimedAt, claimedAtMs,
+//   discardedAt, discardedAtMs,
+// }
+
+export function watchLostFound(cb) {
+  return onSnapshot(
+    query(col('lost_found'), orderBy('foundAtMs', 'desc')),
+    s => cb(s.docs.map(d => ({ id: d.id, ...d.data() })))
+  );
+}
+
+export async function logLostItem({ description, location, photoDataUrl, foundBy, notes }) {
+  return addDoc(col('lost_found'), {
+    description: description.trim(),
+    location:    (location || '').trim(),
+    photoDataUrl: photoDataUrl || null,
+    foundBy:     foundBy || null,
+    notes:       (notes || '').trim(),
+    status:      'unclaimed',
+    foundAt:     serverTimestamp(),
+    foundAtMs:   Date.now(),
+  });
+}
+
+export async function claimLostItem(itemId, claimedBy) {
+  await updateDoc(doc(db, 'venues', _venueId, 'lost_found', itemId), {
+    status: 'claimed',
+    claimedBy: (claimedBy || '').trim() || null,
+    claimedAt: serverTimestamp(),
+    claimedAtMs: Date.now(),
+  });
+}
+
+export async function discardLostItem(itemId, byName) {
+  await updateDoc(doc(db, 'venues', _venueId, 'lost_found', itemId), {
+    status: 'discarded',
+    discardedBy: byName || null,
+    discardedAt: serverTimestamp(),
+    discardedAtMs: Date.now(),
+  });
+}
+
+export async function deleteLostItem(itemId) {
+  await deleteDoc(doc(db, 'venues', _venueId, 'lost_found', itemId));
+}
+
+/** Reopen a claimed/discarded item back to unclaimed (in case of mistake) */
+export async function reopenLostItem(itemId) {
+  await updateDoc(doc(db, 'venues', _venueId, 'lost_found', itemId), {
+    status: 'unclaimed',
+    claimedBy: null,
+    claimedAt: null,
+    claimedAtMs: null,
+    discardedAt: null,
+    discardedAtMs: null,
+  });
+}
+
 // ── Tables ─────────────────────────────────────────────────────────────────
 export function watchTables(cb) {
   return onSnapshot(query(col('tables'), orderBy('number')), s => {

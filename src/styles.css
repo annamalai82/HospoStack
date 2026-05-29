@@ -5776,3 +5776,161 @@ select:focus {
   0%, 100% { box-shadow: 0 0 0 0 transparent; }
   50%      { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 35%, transparent); }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LOST & FOUND — card grid + detail
+   ════════════════════════════════════════════════════════════════════════════ */
+.lf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.lf-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  transition: transform 120ms, border-color 120ms, box-shadow 160ms;
+  position: relative;
+}
+.lf-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border-strong));
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.lf-card--claimed   { opacity: 0.75; }
+.lf-card--discarded { opacity: 0.55; }
+
+.lf-card-photo {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.lf-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.lf-card-photo-empty {
+  width: 100%; height: 100%;
+  display: grid; place-items: center;
+  font-size: 56px;
+  color: var(--text-3);
+  background: var(--surface-3);
+}
+.lf-card-status {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.lf-card-status--claimed   { background: var(--green); color: #001a07; }
+.lf-card-status--discarded { background: var(--text-3); color: #fff; }
+
+.lf-card-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.lf-card-desc {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+  /* Two-line clamp */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lf-card-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+.lf-card-claimed-by {
+  font-size: 11.5px;
+  color: var(--green);
+  font-weight: 600;
+  margin-top: 4px;
+}
+.lf-card-action {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
+  transition: background 120ms;
+}
+.lf-card-action:hover {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.lf-card-action--ghost {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+/* Photo upload preview in the log modal */
+.lf-photo-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.lf-photo-preview img {
+  width: 100%;
+  max-width: 320px;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+/* Detail modal */
+.lf-detail-photo {
+  margin-bottom: 16px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+.lf-detail-photo img {
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  display: block;
+}
+.lf-detail-list {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+.lf-detail-list dt {
+  color: var(--text-3);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  align-self: center;
+}
+.lf-detail-list dd {
+  margin: 0;
+  color: var(--text);
+}

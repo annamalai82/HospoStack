@@ -13,11 +13,13 @@ import UsersPanel from '../components/UsersPanel';
 import ReportsPanel from '../components/ReportsPanel';
 import ReceiptSetupPanel from '../components/ReceiptSetupPanel';
 import GeofenceAuditPanel from '../components/GeofenceAuditPanel';
+import LostFoundPanel from '../components/LostFoundPanel';
 
 const SECTIONS = [
   { id: 'overview',   label: 'Overview',          icon: '🏠' },
   { id: 'reports',    label: 'Reports',            icon: '📊' },
   { id: 'receipts',   label: 'Digital Receipts',   icon: '📨' },
+  { id: 'lostfound',  label: 'Lost & Found',       icon: '🧳' },
   { id: 'geofence',   label: 'Geofence Audit',     icon: '🔓' },
   { id: 'group',      label: 'Group Admin',        icon: '🌐' },
   { id: 'eftpos',     label: 'EFTPOS Reconcile',   icon: '💳' },
@@ -84,6 +86,7 @@ export default function ConfigMode() {
         {section === 'overview'   && <OverviewSection device={device} venues={venues} onJumpTo={setSection} />}
         {section === 'reports'    && <ReportsPanel />}
         {section === 'receipts'   && <ReceiptSetupPanel onToast={showToast} />}
+        {section === 'lostfound'  && <LostFoundPanel />}
         {section === 'geofence'   && <GeofenceAuditPanel />}
         {section === 'group'      && <GroupAdminPanel onToast={showToast} />}
         {section === 'eftpos'     && <EftposReconPanel />}
@@ -128,6 +131,7 @@ function OverviewSection({ device, venues, onJumpTo }) {
   const TILES = [
     { id: 'reports',    icon: '📊', title: 'Sales reports', blurb: 'Itemwise, timewise, by order type. Custom date ranges. CSV export.', cta: 'Open reports →' },
     { id: 'receipts',   icon: '📨', title: 'Digital receipts', blurb: 'Send HTML email + SMS receipts to customers. Setup SendGrid & Twilio.', cta: 'Set up receipts →' },
+    { id: 'lostfound',  icon: '🧳', title: 'Lost & found', blurb: 'Log items customers leave behind. Photo, location, claim tracking.', cta: 'Open log →' },
     { id: 'geofence',   icon: '🔓', title: 'Geofence audit', blurb: 'Review every manager override granted. Append-only audit log.', cta: 'Open audit log →' },
     { id: 'importer',   icon: '✨', title: 'Import a menu', blurb: 'Paste text, upload Excel/PDF/Word, or snap a photo of a handwritten menu.', cta: 'Start importing →' },
     { id: 'group',      icon: '🌐', title: 'Group dashboard', blurb: 'See live sales and tables across all venues in one place.', cta: 'Open dashboard →' },
